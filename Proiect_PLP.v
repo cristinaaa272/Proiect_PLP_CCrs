@@ -21,13 +21,255 @@ Inductive ErrString :=
   | err_string : ErrString
   | str : string -> ErrString.
 
+
+
+
 Coercion num: nat >-> ErrNat.
 Coercion boolean: bool >-> ErrBool.
 Coercion str: string >-> ErrString.
 
+
 Check 7.
 Check false.
 Check "x".
+
+Inductive AExp :=
+| avar: string -> AExp (* Variabilele sunt acum stringuri *)
+| anum: ErrNat -> AExp
+| aplus: AExp -> AExp -> AExp
+| aminus: AExp -> AExp -> AExp
+| amul: AExp -> AExp -> AExp 
+| adiv: AExp -> AExp -> AExp 
+| amod: AExp -> AExp -> AExp
+| ainc : AExp -> AExp
+| adec : AExp -> AExp.
+
+
+Coercion anum: ErrNat >-> AExp.
+Coercion avar: string >-> AExp. 
+
+Definition plus_err (a b : ErrNat) : ErrNat :=
+ match a,b with 
+ | err_nat, _ => err_nat
+ | _, err_nat => err_nat
+ | num a, num b => num (a + b)
+end.
+
+Definition minus_err (a b : ErrNat) : ErrNat :=
+ match a,b with 
+ | err_nat, _ => err_nat
+ | _, err_nat => err_nat
+ | num a, num b => if (ltb a b)
+                   then err_nat
+                   else num (a - b)
+end.
+
+Definition mul_err (a b : ErrNat) : ErrNat :=
+ match a,b with 
+ | err_nat, _ => err_nat
+ | _, err_nat => err_nat
+ | num a, num b => num (a * b)
+end.
+
+Definition div_err (a b : ErrNat) : ErrNat :=
+ match a,b with 
+ | err_nat, _ => err_nat
+ | _, err_nat => err_nat
+ | _, num 0 => err_nat
+ | num a, num b => num (div a b)
+end.
+
+
+Definition mod_err (a b : ErrNat) : ErrNat :=
+ match a,b with 
+ | err_nat, _ => err_nat
+ | _, err_nat => err_nat
+ | _, num 0 => err_nat
+ | num a, num b => num  (modulo a b)
+end.
+
+Definition inc (a : ErrNat) : ErrNat :=
+ match a with
+  | err_nat => err_nat
+  | num a => num (a + 1)
+ end.
+
+Definition dec (a : ErrNat) : ErrNat :=
+ match a with
+  | err_nat => err_nat
+  | 0 => err_nat
+  | num a => num (a - 1)
+ end.
+
+Inductive BExp :=
+| b_err : BExp
+| b_true : BExp
+| b_false : BExp
+| b_var: string -> BExp 
+| b_lessthan : AExp -> AExp -> BExp
+| b_morethan : AExp -> AExp -> BExp
+| b_not : BExp -> BExp
+| b_and : BExp -> BExp -> BExp
+| b_or : BExp -> BExp -> BExp
+| b_xor : BExp -> BExp -> BExp.
+
+Coercion b_var : string >-> BExp.
+
+Definition lessthan_err (b1 b2 : ErrNat) : ErrBool :=
+  match b1, b2 with
+    | err_nat, _ => err_bool
+    | _, err_nat => err_bool
+    | num x, num y => boolean (ltb x y)
+    end.
+
+Definition morethan_err (b1 b2 : ErrNat) : ErrBool :=
+  match b1, b2 with
+    | err_nat, _ => err_bool
+    | _, err_nat => err_bool
+    | num x, num y => boolean (negb (ltb x y)) 
+    end.
+
+Definition not_err (n : ErrBool) : ErrBool :=
+  match n with
+    | err_bool => err_bool
+    | boolean m => boolean (negb m)
+    end.
+
+Definition and_err (b1 b2 : ErrBool) : ErrBool :=
+  match b1, b2 with
+    | err_bool, _ => err_bool
+    | _, err_bool => err_bool
+    | boolean x, boolean y => boolean (andb x y)
+    end.
+
+Definition or_err (b1 b2 : ErrBool) : ErrBool :=
+  match b1, b2 with
+    | err_bool, _ => err_bool
+    | _, err_bool => err_bool
+    | boolean x, boolean y => boolean (orb x y)
+    end.
+
+
+Definition xorb_err (b1 b2 : ErrBool) : ErrBool :=
+  match b1, b2 with
+    | err_bool,_ => err_bool
+    | _, err_bool => err_bool
+    | true, true => false
+    | true, false => true
+    | false, true => true
+    | false, false => false
+  end.
+
+
+
+(*Statements*)
+
+Inductive Statement :=
+  | nat_decl: string -> Statement 
+  | bool_decl: string  -> Statement 
+  | str_decl : string -> Statement
+  | array_decl_n : string  -> Statement
+  | array_decl_b : string  -> Statement
+  | array_decl_s : string  -> Statement
+  | nat_assign : string -> AExp -> Statement 
+  | bool_assign : string -> BExp -> Statement
+  | str_assign : string -> string -> Statement
+  | array_assign_n : string -> (list nat) -> Statement
+  | array_assign_b : string -> (list bool) -> Statement
+  | array_assign_s : string -> (list string) -> Statement 
+  | sequence : Statement  -> Statement  -> Statement 
+  | while : BExp -> Statement -> Statement
+  | for_new : Statement -> BExp -> Statement -> Statement
+  | ifthen : BExp -> Statement -> Statement
+  | ifthenelse : BExp -> Statement -> Statement -> Statement.
+
+(*Arrays*)
+
+Require Setoid.
+Require Import PeanoNat Le Gt Minus Bool Lt.
+
+Set Implicit Arguments.
+Open Scope list_scope.
+
+Inductive ErrArray :=
+ | err_array : ErrArray
+ | array_n : string -> (list nat) -> ErrArray
+ | array_b : string -> (list bool) -> ErrArray
+ | array_s : string -> (list string) -> ErrArray.
+ 
+
+Notation "[ ]" := nil (format "[ ]") : list_scope.
+Notation "[ x ]" := (cons x nil) : list_scope.
+Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
+
+
+
+Section Lists.
+Check  [1 , 3 , 5 , 8].
+Check [].
+Check [true , false].
+Check ["proiect" , "PLP"].
+
+Notation "'Nat_array' A " :=(array_decl_n A)(at level 4).
+Notation "'Bool_array' B " :=(array_decl_b B)(at level 4).
+Notation "'Str_array' S " :=(array_decl_s S)(at level 4).
+
+
+Notation " A n:=  X  " := (array_assign_n A X) (at level 30).
+Notation " A b:=  B  " := (array_assign_b A B) (at level 30).
+Notation " A s:=  S  " := (array_assign_s A S) (at level 30).
+
+
+Check (Nat_array "x").
+Check (Bool_array "booleans").
+Check (Str_array "strs").
+
+Check ("x" n:= [ 1 , 2 ]).
+Check ("booleans" b:= [ false , true ]).
+Check ("strs" s:= [ "project" , "syntax"]).
+
+(* Array operations *)
+
+Inductive Array_opp :=
+ | insert : ErrArray -> Array_opp
+ | delete : ErrArray -> Array_opp
+ | find : ErrArray -> Array_opp.
+
+
+
+(*String operations*)
+
+Inductive Strings_opp :=
+ | strlen : ErrString -> Strings_opp
+ | strcmp : ErrString -> ErrString -> Strings_opp
+ | strcat : ErrString -> ErrString -> Strings_opp.
+
+
+Definition str_length (s : ErrString) : ErrNat :=
+ match s with 
+  | err_string => err_nat
+  | str s1 => length s1
+ end.
+
+
+Definition str_cat (s1 s2 : ErrString) : ErrString :=
+ match s1,s2 with
+  | err_string, _ => err_string
+  | _, err_string => err_string
+  | str s1, str s2 => str (s1 ++ s2)
+ end.
+
+Definition str_cmp (s1 s2 : ErrString) : ErrString :=
+ match s1,s2 with 
+  | err_string, _ => err_string
+  | _, err_string => err_string
+  | str s1, str s2 =>
+     if (ltb (length s1) (length s2))
+     then s2
+     else s1
+ end.
+
+
 
 
 
@@ -142,74 +384,15 @@ Compute (env "sum").
 Compute (env [default_bool // "y"]).
 Compute (update_env (update_env env "y" (default_nat)) "y" (val_bool true) "y").
 
-Inductive AExp :=
-| avar: string -> AExp (* Variabilele sunt acum stringuri *)
-| anum: ErrNat -> AExp
-| aplus: AExp -> AExp -> AExp
-| aminus: AExp -> AExp -> AExp
-| amul: AExp -> AExp -> AExp 
-| adiv: AExp -> AExp -> AExp 
-| amod: AExp -> AExp -> AExp
-| ainc : AExp -> AExp
-| adec : AExp -> AExp.
 
 
-Coercion anum: ErrNat >-> AExp.
-Coercion avar: string >-> AExp. 
-
-Definition plus_err (a b : ErrNat) : ErrNat :=
- match a,b with 
- | err_nat, _ => err_nat
- | _, err_nat => err_nat
- | num a, num b => num (a + b)
-end.
-
-Definition minus_err (a b : ErrNat) : ErrNat :=
- match a,b with 
- | err_nat, _ => err_nat
- | _, err_nat => err_nat
- | num a, num b => if (ltb a b)
-                   then err_nat
-                   else num (a - b)
-end.
-
-Definition mul_err (a b : ErrNat) : ErrNat :=
- match a,b with 
- | err_nat, _ => err_nat
- | _, err_nat => err_nat
- | num a, num b => num (a * b)
-end.
-
-Definition div_err (a b : ErrNat) : ErrNat :=
- match a,b with 
- | err_nat, _ => err_nat
- | _, err_nat => err_nat
- | _, num 0 => err_nat
- | num a, num b => num (div a b)
-end.
 
 
-Definition mod_err (a b : ErrNat) : ErrNat :=
- match a,b with 
- | err_nat, _ => err_nat
- | _, err_nat => err_nat
- | _, num 0 => err_nat
- | num a, num b => num  (modulo a b)
-end.
 
-Definition inc (a : ErrNat) : ErrNat :=
- match a with
-  | err_nat => err_nat
-  | num a => num (a + 1)
- end.
 
-Definition dec (a : ErrNat) : ErrNat :=
- match a with
-  | err_nat => err_nat
-  | 0 => err_nat
-  | num a => num (a - 1)
- end.
 
+  
+(*Notations & examples for arithmetic expressions *)
 Notation "A +' B" := (aplus A B)(at level 50, left associativity).
 Notation "A -' B" := (aminus A B)(at level 50, left associativity).
 Notation "A *' B" := (amul A B)(at level 48, left associativity).
@@ -224,120 +407,7 @@ Compute ("sum" /' "sum"---).
 Compute ("i" +++).
 Compute (3 %' 0).
 
-
-Inductive BExp :=
-| b_err : BExp
-| b_true : BExp
-| b_false : BExp
-| b_var: string -> BExp 
-| b_lessthan : AExp -> AExp -> BExp
-| b_morethan : AExp -> AExp -> BExp
-| b_not : BExp -> BExp
-| b_and : BExp -> BExp -> BExp
-| b_or : BExp -> BExp -> BExp
-| b_xor : BExp -> BExp -> BExp.
-
-Coercion b_var : string >-> BExp.
-
-Definition lessthan_err (b1 b2 : ErrNat) : ErrBool :=
-  match b1, b2 with
-    | err_nat, _ => err_bool
-    | _, err_nat => err_bool
-    | num x, num y => boolean (ltb x y)
-    end.
-
-Definition morethan_err (b1 b2 : ErrNat) : ErrBool :=
-  match b1, b2 with
-    | err_nat, _ => err_bool
-    | _, err_nat => err_bool
-    | num x, num y => boolean (negb (ltb x y)) 
-    end.
-
-Definition not_err (n : ErrBool) : ErrBool :=
-  match n with
-    | err_bool => err_bool
-    | boolean m => boolean (negb m)
-    end.
-
-Definition and_err (b1 b2 : ErrBool) : ErrBool :=
-  match b1, b2 with
-    | err_bool, _ => err_bool
-    | _, err_bool => err_bool
-    | boolean x, boolean y => boolean (andb x y)
-    end.
-
-Definition or_err (b1 b2 : ErrBool) : ErrBool :=
-  match b1, b2 with
-    | err_bool, _ => err_bool
-    | _, err_bool => err_bool
-    | boolean x, boolean y => boolean (orb x y)
-    end.
-
-
-Definition xorb_err (b1 b2 : ErrBool) : ErrBool :=
-  match b1, b2 with
-    | err_bool,_ => err_bool
-    | _, err_bool => err_bool
-    | true, true => false
-    | true, false => true
-    | false, true => true
-    | false, false => false
-  end.
-
-
-Inductive Statement :=
-  | nat_decl: string -> AExp -> Statement 
-  | bool_decl: string -> BExp -> Statement 
-  | str_decl : string -> string -> Statement
-  | nat_assign : string -> AExp -> Statement 
-  | bool_assign : string -> BExp -> Statement
-  | str_assign : string -> string -> Statement 
-  | sequence : Statement  -> Statement  -> Statement 
-  | while : BExp -> Statement -> Statement
-  | for_new : Statement -> BExp -> Statement -> Statement
-  | ifthen : BExp -> Statement -> Statement
-  | ifthenelse : BExp -> Statement -> Statement -> Statement.
-
-Inductive Strings_opp :=
- | strlen : ErrString -> Strings_opp
- | strcmp : ErrString -> ErrString -> Strings_opp
- | strcat : ErrString -> ErrString -> Strings_opp.
-
-
-Definition str_length (s : ErrString) : ErrNat :=
- match s with 
-  | err_string => err_nat
-  | str s1 => length s1
- end.
-
-
-Definition str_cat (s1 s2 : ErrString) : ErrString :=
- match s1,s2 with
-  | err_string, _ => err_string
-  | _, err_string => err_string
-  | str s1, str s2 => str (s1 ++ s2)
- end.
-
-Definition str_cmp (s1 s2 : ErrString) : ErrNat :=
- match s1,s2 with 
-  | err_string, _ => err_nat
-  | _, err_string => err_nat
-  | str s1, str s2 =>
-     if (eqb(length s1) (length s2))
-     then 0
-     else 1
- end.
-
-
-Notation " len[ S ] " := (strlen S) (at level 31).
-Notation " S1 /+/ S2 " := (strcat S1 S2) (at level 30).
-Notation " S1 ? S2 " := (strcmp S1 S2) (at level 32).
-
-Check ("Info " /+/ "PLP") .
-Check (len[ "Proiect" ]).
-Check ("ab" ? "ba") .
-
-
+(*Notations & examples for boolean expressions *)
 Notation "A <=' B" := (b_lessthan A B) (at level 53).
 Notation "A >=' B" := (b_morethan A B) (at level 53).
 Notation " ! A " := (b_not A) (at level 71).
@@ -352,7 +422,16 @@ Compute ( b_true | b_false | "sum" | ("a" <=' "b")).
 Compute (b_true ^^ b_false).
 Compute ("a" ^^ "b").
 
+(*Notations & examples for string operations *)
+Notation " len[ S ] " := (strlen S) (at level 31).
+Notation " S1 /+/ S2 " := (strcat S1 S2) (at level 30).
+Notation " S1 ? S2 " := (strcmp S1 S2) (at level 32).
 
+Check ("Info " /+/ "PLP") .
+Check (len[ "Proiect" ]).
+Check ("ab" ? "ba") .
+
+(*Notations & examples for statements*)
 Notation "'NAT' X ::= A" := (nat_decl X A)(at level 90).
 Notation "'BOOL' X ::= A" := (bool_decl X A)(at level 90).
 Notation "'STR' X ::= A " := (str_decl X A) (at level 90).
@@ -360,36 +439,37 @@ Notation "X n:= A" := (nat_assign X A)(at level 90).
 Notation "X b:= A" := (bool_assign X A)(at level 90).
 Notation "X s:= A" := (str_assign X A)(at level 90).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
-Notation " 'While' '(' A ')' '(' S ')' 'End' " := (while A S) (at level 97).
-Notation "'For' ( A ; B ; C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
-Notation "'If' B 'Then' S  'End'" := (ifthenelse B S) (at level 97).
-Notation "'If' B 'Then' S1 'Else' S2 'End'" := (ifthenelse B S1 S2) (at level 97).
+Notation " 'While' '(' A ')' '{' S '}' 'End' " := (while A S) (at level 97).
+Notation "'FOR' ( A ; B ; C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
+Notation "'If' B 'Then' '(' S ')'  'End'" := (ifthenelse B S) (at level 97).
+Notation "'If' B 'Then' '(' S1 ')' 'Else' '(' S2 ')' 'End'" := (ifthenelse B S1 S2) (at level 97).
 
 
+
+Check
+  NAT "a" ::= 27 ;; NAT "b" ::= 3 ;; NAT "r" ::= 0 ;;
+  While ("b") 
+     { "r" n:= "a" %' "b" ;;
+       "a" n:= "b" ;;
+       "b" n:= "r" }
+  End.
 
 (*Check
- ( NAT "a" n:= 27 ;; NAT "b" n:= 3 ;; NAT "r" n:= 0 ;;
-  While ( "b" (! 0) ) 
-     ( "r" :n= "a" %' "b" ;;
-       "a" :n= "b" ;;
-       "b" :n= "r" )
-  End ).
+    NAT "sum" ::= 0 ;;
+    fors ( (NAT "i" ::= 0) ~ "i" <=' 6 ~ "i" n:= "i" +++ ) {
+      "sum" :n= "sum" +' "i" }
+.
 
 Check 
- "n" := 10 ;
- "m" := 7 ;
-If (2 <' 5) 
-  Then "max" := 9
-    Else "max" := 7
-End.
-
-*)
-
-
-
-
+     STR "n" ::= "homework" ;;
+     NAT "x" ::= 10 ;;
+     NAT "L" ;; "L" n:= len["n"] ;;
+  If ("L")
+      Then ( "L" n:= "x" )
+      Else ( "L" n:= 0 )
+  End.
   
-
+*)
 
 
 
