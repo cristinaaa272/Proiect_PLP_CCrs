@@ -7,6 +7,10 @@ Require Import Arith.
 Require Import Ascii.
 Require Import Bool.
 Require Import Nat.
+Require Setoid.
+Require Import PeanoNat Le Gt Minus Bool Lt.
+Set Implicit Arguments.
+Open Scope list_scope.
 
 
 Inductive ErrNat :=
@@ -22,8 +26,6 @@ Inductive ErrString :=
   | str : string -> ErrString.
 
 
-
-
 Coercion num: nat >-> ErrNat.
 Coercion boolean: bool >-> ErrBool.
 Coercion str: string >-> ErrString.
@@ -33,8 +35,10 @@ Check 7.
 Check false.
 Check "x".
 
+(*Arithmetic expressions *)
+
 Inductive AExp :=
-| avar: string -> AExp (* Variabilele sunt acum stringuri *)
+| avar: string -> AExp 
 | anum: ErrNat -> AExp
 | aplus: AExp -> AExp -> AExp
 | aminus: AExp -> AExp -> AExp
@@ -47,6 +51,8 @@ Inductive AExp :=
 
 Coercion anum: ErrNat >-> AExp.
 Coercion avar: string >-> AExp. 
+
+(*Operations with arithmetic expressions *)
 
 Definition plus_err (a b : ErrNat) : ErrNat :=
  match a,b with 
@@ -101,33 +107,54 @@ Definition dec (a : ErrNat) : ErrNat :=
   | num a => num (a - 1)
  end.
 
+(*Boolean expressions *)
+
 Inductive BExp :=
-| b_err : BExp
+| b_err : ErrString -> BExp
 | b_true : BExp
 | b_false : BExp
 | b_var: string -> BExp 
-| b_lessthan : AExp -> AExp -> BExp
-| b_morethan : AExp -> AExp -> BExp
+| b_less : AExp -> AExp -> BExp
+| b_more : AExp -> AExp -> BExp
+| b_less_eq : AExp -> AExp -> BExp
+| b_more_eq : AExp -> AExp -> BExp
 | b_not : BExp -> BExp
 | b_and : BExp -> BExp -> BExp
 | b_or : BExp -> BExp -> BExp
 | b_xor : BExp -> BExp -> BExp.
 
+Coercion b_err : ErrString >-> BExp.
 Coercion b_var : string >-> BExp.
 
-Definition lessthan_err (b1 b2 : ErrNat) : ErrBool :=
+(*Operations with boolean expressions*)
+
+Definition less_err (b1 b2 : ErrNat) : ErrBool :=
   match b1, b2 with
     | err_nat, _ => err_bool
     | _, err_nat => err_bool
-    | num x, num y => boolean (ltb x y)
+    | num x, num y => boolean (Nat.ltb x y)
     end.
 
-Definition morethan_err (b1 b2 : ErrNat) : ErrBool :=
+Definition more_err (b1 b2 : ErrNat) : ErrBool :=
   match b1, b2 with
     | err_nat, _ => err_bool
     | _, err_nat => err_bool
-    | num x, num y => boolean (negb (ltb x y)) 
+    | num x, num y => boolean (negb (Nat.ltb x y)) 
     end.
+
+Definition less_eq_err (b1 b2 : ErrNat) : ErrBool :=
+ match b1, b2 with
+  | err_nat, _ => err_bool
+  | _, err_nat => err_bool
+  | num x, num y => boolean (Nat.leb x y)
+ end.
+
+Definition more_eq_err (b1 b2 : ErrNat) : ErrBool :=
+ match b1, b2 with
+  | err_nat, _ => err_bool
+  | _, err_nat => err_bool
+  | num x, num y => boolean (negb (Nat.leb x y))
+ end.
 
 Definition not_err (n : ErrBool) : ErrBool :=
   match n with
@@ -160,90 +187,18 @@ Definition xorb_err (b1 b2 : ErrBool) : ErrBool :=
     | false, false => false
   end.
 
+(*String expressions *)
 
+Inductive STRexp :=
+ | str_err : ErrString -> STRexp
+ | str_var : string -> STRexp
+ | strlen : ErrString -> STRexp
+ | strcmp : ErrString -> ErrString -> STRexp
+ | strcat : ErrString -> ErrString -> STRexp.
 
-(*Statements*)
+Coercion str_var : string >-> STRexp.
 
-Inductive Statement :=
-  | nat_decl: string -> Statement 
-  | bool_decl: string  -> Statement 
-  | str_decl : string -> Statement
-  | array_decl_n : string  -> Statement
-  | array_decl_b : string  -> Statement
-  | array_decl_s : string  -> Statement
-  | nat_assign : string -> AExp -> Statement 
-  | bool_assign : string -> BExp -> Statement
-  | str_assign : string -> string -> Statement
-  | array_assign_n : string -> (list nat) -> Statement
-  | array_assign_b : string -> (list bool) -> Statement
-  | array_assign_s : string -> (list string) -> Statement 
-  | sequence : Statement  -> Statement  -> Statement 
-  | while : BExp -> Statement -> Statement
-  | for_new : Statement -> BExp -> Statement -> Statement
-  | ifthen : BExp -> Statement -> Statement
-  | ifthenelse : BExp -> Statement -> Statement -> Statement.
-
-(*Arrays*)
-
-Require Setoid.
-Require Import PeanoNat Le Gt Minus Bool Lt.
-
-Set Implicit Arguments.
-Open Scope list_scope.
-
-Inductive ErrArray :=
- | err_array : ErrArray
- | array_n : string -> (list nat) -> ErrArray
- | array_b : string -> (list bool) -> ErrArray
- | array_s : string -> (list string) -> ErrArray.
- 
-
-Notation "[ ]" := nil (format "[ ]") : list_scope.
-Notation "[ x ]" := (cons x nil) : list_scope.
-Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
-
-
-
-Section Lists.
-Check  [1 , 3 , 5 , 8].
-Check [].
-Check [true , false].
-Check ["proiect" , "PLP"].
-
-Notation "'Nat_array' A " :=(array_decl_n A)(at level 4).
-Notation "'Bool_array' B " :=(array_decl_b B)(at level 4).
-Notation "'Str_array' S " :=(array_decl_s S)(at level 4).
-
-
-Notation " A n:=  X  " := (array_assign_n A X) (at level 30).
-Notation " A b:=  B  " := (array_assign_b A B) (at level 30).
-Notation " A s:=  S  " := (array_assign_s A S) (at level 30).
-
-
-Check (Nat_array "x").
-Check (Bool_array "booleans").
-Check (Str_array "strs").
-
-Check ("x" n:= [ 1 , 2 ]).
-Check ("booleans" b:= [ false , true ]).
-Check ("strs" s:= [ "project" , "syntax"]).
-
-(* Array operations *)
-
-Inductive Array_opp :=
- | insert : ErrArray -> Array_opp
- | delete : ErrArray -> Array_opp
- | find : ErrArray -> Array_opp.
-
-
-
-(*String operations*)
-
-Inductive Strings_opp :=
- | strlen : ErrString -> Strings_opp
- | strcmp : ErrString -> ErrString -> Strings_opp
- | strcat : ErrString -> ErrString -> Strings_opp.
-
+(*Operations with strings *)
 
 Definition str_length (s : ErrString) : ErrNat :=
  match s with 
@@ -270,128 +225,85 @@ Definition str_cmp (s1 s2 : ErrString) : ErrString :=
  end.
 
 
+(*Arrays*)
 
 
 
-(*Construim un TIP general de rezultat care inglobeaza mai multe tipuri pentru varialbile*)
+Inductive ErrArray :=
+ | err_array : ErrArray
+ | array_n : string -> nat -> (list nat) -> ErrArray
+ | array_b : string -> nat -> (list bool) -> ErrArray
+ | array_s : string -> nat -> (list string) -> ErrArray.
+ 
+
+
+(* Array operations *)
+
+Inductive Array_opp :=
+ | arr_len : ErrArray -> Array_opp
+ | insert : ErrArray -> Array_opp
+ | delete : ErrArray -> Array_opp
+ | min : ErrArray -> Array_opp
+ | max : ErrArray -> Array_opp.
+
+
+
+(*Statements*)
+
+Inductive Statement :=
+  | nat_decl: string  -> AExp -> Statement 
+  | bool_decl: string ->  BExp -> Statement 
+  | str_decl : string -> STRexp -> Statement
+  | array_decl_n : string -> nat -> Statement
+  | array_decl_b : string -> nat  -> Statement
+  | array_decl_s : string -> nat -> Statement
+  | nat_assign : string -> AExp -> Statement 
+  | bool_assign : string -> BExp -> Statement
+  | str_assign : string -> string -> Statement
+  | array_assign_n : string -> nat -> (list nat) -> Statement
+  | array_assign_b : string -> nat -> (list bool) -> Statement
+  | array_assign_s : string -> nat -> (list string) -> Statement 
+  | sequence : Statement  -> Statement  -> Statement 
+  | cin : string -> Statement (*input -> variable *)
+  | cout : STRexp -> Statement
+  | while : BExp -> Statement -> Statement
+  | for_new : Statement -> BExp -> Statement -> Statement
+  | ifthen : BExp -> Statement -> Statement
+  | ifthenelse : BExp -> Statement -> Statement -> Statement
+  | break : Statement
+  | continue : Statement
+  | switchcase : AExp -> list Case -> Statement
+  | fun_call : string -> (list string) -> Statement (*apel de functie cu o serie de parametrii *)
+   with Case :=
+    | case_default : Statement -> Case
+    | case_x : AExp -> Statement -> Case .
+
 
 Inductive Types :=
-  | err_undecl : Types (* tip de eroare - variabila e folosita fara a fi declarata*)
-  | err_assign : Types (* tip de eroare - atribui un bool desi am zis ca atribui nat*)
-  | default_nat: Types (*o variabila nat , dupa declarare , primeste o valoare default*)
-  | default_bool : Types
-  | default_string : Types
+  | err_undecl : Types (*  Error - variable used undeclared *)
+  | err_assign : Types (* Error - declared a type , assigned other *)
+  | default : Types (* default value for a variable *)
   | val_nat : ErrNat -> Types (*valorile pe care le atribui unei variabile declarate  nat*)
-  | val_bool : ErrBool -> Types (* -||- de tip bool *)
-  | val_string : ErrString -> Types.
+  | val_bool : ErrBool -> Types (* -|| de tip bool *)
+  | val_string : ErrString -> Types (* -||- de tip string *)
+  | code : Statement -> Types. (* function code  *)
+
+Coercion code : Statement >-> Types.
 
 
+(*Inductive type for functions *)
 
-Scheme Equality for Types.
-(*In momentul in care declari o variabila , ori ii dai o valoare default
-ori o declari si o si initializezi cu o valoare *)
+Inductive Pgm :=
+| secv : Pgm -> Pgm -> Pgm (*Secventa de funcii si/sau declaratii de variabile *)
+| default_nat_decl : string -> Pgm (*declarare nat cu valoare default*)
+| default_bool_decl : string -> Pgm (*declarare int cu valoare default*)
+| default_string_decl : string -> Pgm (*declarare string cu valoare default*)
+| default_array_decl : string -> Pgm
+| main : Statement -> Pgm (* main function - no parameters *)
+| function : string -> list string -> Statement -> Pgm. (* functions *)
 
-(* Env = mapare de la string-uri la tipul Types*)
-Definition Env := string -> Types.
+(* Default values types - used for variables of different types outside a function *)
 
-(* Env initial : orice variabila este undeclared ,pana o declar .
-dupa ce o declar, primeste , dupa caz, valoarea default pentru nat/bool/string 
-Abia dupa ce are o valoare default, ii putem asigna o alta valoare prin atribuire  *)
-Definition env : Env := 
-  fun x => err_undecl.
-Compute (env "y").
-
-Definition type_equality  (t1 : Types)(t2 : Types) : bool :=
- match t1 with 
- | err_undecl => match t2 with 
-                 | err_undecl => true
-                 | _ => false
-                end
- | err_assign => match t2 with 
-                 | err_assign => true
-                 | _ => false
-                end
- | default_nat => match t2 with 
-                 | default_nat => true
-                 | _ => false
-                end
- | default_bool => match t2 with 
-                 | default_bool => true
-                 | _ => false
-                end
- | default_string => match t2 with 
-                 | default_string => true
-                 | _ => false
-                end
- | val_nat a => match t2 with
-              | val_nat b => true
-              | _ => false
-              end
- | val_bool b1 => match t2 with
-              | val_bool b2 => true
-              | _ => false
-              end
- | val_string s1 => match t2 with
-              | val_string s2 => true
-              | _ => false
-              end
-  end.
-
-Compute (type_equality err_undecl err_assign ).
-Compute (type_equality (val_nat 100) (val_bool false)).
-Compute (type_equality (val_string "s1") (val_string "s2")).
-
-
-
-Definition update_env (env : Env) (x : string) (val : Types) : Env :=
- fun y =>
-  if (string_beq y x) 
-   then
-     if(andb (type_equality err_undecl (env y)) (negb (type_equality default_nat val)))
-       then err_undecl
-       else 
-           if (andb (type_equality err_undecl (env y)) (negb (type_equality default_bool val)))
-           then err_undecl
-           else 
-              if(andb (type_equality err_undecl (env y)) (negb (type_equality default_string val)))
-              then err_undecl
-       else 
-           if (andb (type_equality err_undecl (env y)) ((type_equality default_nat val)))
-           then default_nat
-           else 
-             if (andb (type_equality err_undecl (env y)) ((type_equality default_bool val))) 
-             then default_bool
-             else
-                if (andb (type_equality err_undecl (env y)) ((type_equality default_string val)))
-                then default_string
-        else 
-           if(orb (type_equality default_nat (env y)) (type_equality val (env y)))
-           then val
-           else 
-              if(orb (type_equality default_bool (env y)) (type_equality val (env y)))
-              then val
-              else
-                 if(orb (type_equality default_string (env y)) (type_equality val (env y)))
-                 then val
-                 else err_assign
-
-  else (env y).
-
-Notation "E [ V // X ]" := (update_env E X V) (at level 0).
-
-Compute (env "sum").
-
-Compute (env [default_bool // "y"]).
-Compute (update_env (update_env env "y" (default_nat)) "y" (val_bool true) "y").
-
-
-
-
-
-
-
-
-  
 (*Notations & examples for arithmetic expressions *)
 Notation "A +' B" := (aplus A B)(at level 50, left associativity).
 Notation "A -' B" := (aminus A B)(at level 50, left associativity).
@@ -408,8 +320,10 @@ Compute ("i" +++).
 Compute (3 %' 0).
 
 (*Notations & examples for boolean expressions *)
-Notation "A <=' B" := (b_lessthan A B) (at level 53).
-Notation "A >=' B" := (b_morethan A B) (at level 53).
+Notation "A <' B" := (b_less A B) (at level 53).
+Notation "A >' B" := (b_more A B) (at level 53).
+Notation "A <=' B" := (b_less_eq A B) (at level 53).
+Notation "A >=' B" := (b_more_eq A B) (at level 53).
 Notation " ! A " := (b_not A) (at level 71).
 Notation "A & B" := (b_and A B) (at level 75).
 Notation "A | B" := (b_or A B) (at level 75).
@@ -431,45 +345,91 @@ Check ("Info " /+/ "PLP") .
 Check (len[ "Proiect" ]).
 Check ("ab" ? "ba") .
 
-(*Notations & examples for statements*)
-Notation "'NAT' X ::= A" := (nat_decl X A)(at level 90).
-Notation "'BOOL' X ::= A" := (bool_decl X A)(at level 90).
+
+(*Notations & examples for arrays*)
+Notation "[ ]" := nil (format "[ ]") : list_scope.
+Notation "[ x ]" := (cons x nil) : list_scope.
+Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
+
+
+Check  [1 , 3 , 5 , 8].
+Check [].
+Check [true , false].
+Check ["proiect" , "PLP"].
+
+Notation "'Nat_array' A '[(' X ')]' " :=(array_decl_n A X)(at level 4).
+Notation " A '[[' X ']]' n->  L  " := (array_assign_n A X L) (at level 30).
+
+Notation "'Bool_array' B '[(' X ')]' " :=(array_decl_n B X)(at level 4).
+Notation " B '[[' X ']]' b->  L  " := (array_assign_b B X L) (at level 30).
+
+
+Notation "'Str_array' S '[(' X ')]' " :=(array_decl_s S X)(at level 4).
+Notation " S '[[' X ']]' s->  L  " := (array_assign_s S X L) (at level 30).
+
+Check Nat_array "x"[(2)].
+Check Bool_array "booleans"[(3)].
+Check Str_array "homework"[(2)].
+
+Check "x"[[2]] n-> [ 0, 1].
+Check "booleans"[[3]] b-> [true,true,false].
+Check "homework"[[2]] s-> ["project", "syntax"].
+
+
+(*Notations & examples for statements & functions *)
+Notation "'NAT' X ::= A  " := (nat_decl X A)(at level 90).
+Notation "'BOOL' X ::= A " := (bool_decl X A)(at level 90).
 Notation "'STR' X ::= A " := (str_decl X A) (at level 90).
-Notation "X n:= A" := (nat_assign X A)(at level 90).
+
+Notation "'Default_nat' X" := (default_nat_decl X) (at level 90).
+Notation "'Default_bool' B" := (default_bool_decl  B) (at level 90).
+Notation "'Default_str' S" := (default_string_decl S) (at level 90).
+Notation "'Default_arr' V" := (default_array_decl V) (at level 90).
+
+Notation "X n:= A" := (nat_assign X A)(at level 80).
 Notation "X b:= A" := (bool_assign X A)(at level 90).
 Notation "X s:= A" := (str_assign X A)(at level 90).
+
+
+
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
-Notation " 'While' '(' A ')' '{' S '}' 'End' " := (while A S) (at level 97).
-Notation "'FOR' ( A ; B ; C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
-Notation "'If' B 'Then' '(' S ')'  'End'" := (ifthenelse B S) (at level 97).
-Notation "'If' B 'Then' '(' S1 ')' 'Else' '(' S2 ')' 'End'" := (ifthenelse B S1 S2) (at level 97).
+Notation "S1 ; S2" := (secv S1 S2) (at level 93, right associativity).
+
+Notation "'While'(' B ) 'Do'{' S '}End'" := (while B S) (at level 97).
+Notation "'For'(' A ; B ; C ) 'Do'{' S '}End'" := (A ;; while B ( S ;; C )) (at level 97).
+Notation "'If'(' B ) 'Then'{' S '}End'" := (ifthen B S) (at level 97).
+Notation "'If'(' B ) 'Then'{' S1 '}Else'{' S2 '}End'" := (ifthenelse B S1 S2) (at level 97).
+
+Notation "'default:{' S };" := (case_default S) (at level 97).
+Notation "'case(' X ):{ S };" := (case_x X S) (at level 97).
+Notation "'switchcase'(' Y ){ case_1 .. case_n '}end'" := (switchcase Y (cons case_1 .. (cons case_n nil) .. )) (at level 98).
+
+Notation "'int' 'main()' { S }" := (main S)(at level 90). 
+Notation "'int' F (){ S }" := (function F nil S)(at level 90).
+Notation "'int' F (( p_1 , .. , p_n )){ S }" := (function F (cons p_1 .. (cons p_n nil) .. ) S)(at level 90).
+
+
+Notation "'cin>>(' I )" := (cin I) (at level 92).
+Notation "'cout<<(' O )" := (cout O) (at level 92).
+
+Notation "'fun' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n nil) .. ) ) (at level 89).
+Notation "'fun' F (( ))" := (fun_call F nil) (at level 89).
 
 
 
-Check
-  NAT "a" ::= 27 ;; NAT "b" ::= 3 ;; NAT "r" ::= 0 ;;
-  While ("b") 
-     { "r" n:= "a" %' "b" ;;
-       "a" n:= "b" ;;
-       "b" n:= "r" }
-  End.
 
-(*Check
-    NAT "sum" ::= 0 ;;
-    fors ( (NAT "i" ::= 0) ~ "i" <=' 6 ~ "i" n:= "i" +++ ) {
-      "sum" :n= "sum" +' "i" }
-.
 
-Check 
-     STR "n" ::= "homework" ;;
-     NAT "x" ::= 10 ;;
-     NAT "L" ;; "L" n:= len["n"] ;;
-  If ("L")
-      Then ( "L" n:= "x" )
-      Else ( "L" n:= 0 )
-  End.
-  
-*)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
