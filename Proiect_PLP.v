@@ -251,8 +251,8 @@ Inductive Array_opp :=
 (*Statements*)
 
 Inductive Statement :=
-  | nat_decl: string  -> AExp -> Statement 
-  | bool_decl: string ->  BExp -> Statement 
+  | nat_decl: string -> AExp -> Statement 
+  | bool_decl: string -> BExp -> Statement 
   | str_decl : string -> STRexp -> Statement
   | array_decl_n : string -> nat -> Statement
   | array_decl_b : string -> nat  -> Statement
@@ -279,6 +279,7 @@ Inductive Statement :=
     | case_x : AExp -> Statement -> Case .
 
 
+
 Inductive Types :=
   | err_undecl : Types (*  Error - variable used undeclared *)
   | err_assign : Types (* Error - declared a type , assigned other *)
@@ -301,6 +302,8 @@ Inductive Pgm :=
 | default_array_decl : string -> Pgm
 | main : Statement -> Pgm (* main function - no parameters *)
 | function : string -> list string -> Statement -> Pgm. (* functions *)
+
+
 
 (* Default values types - used for variables of different types outside a function *)
 
@@ -395,10 +398,10 @@ Notation "X s:= A" := (str_assign X A)(at level 90).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "S1 ; S2" := (secv S1 S2) (at level 93, right associativity).
 
-Notation "'While'(' B ) 'Do'{' S '}End'" := (while B S) (at level 97).
+Notation " 'While' '(' B ')' '{' S '}' " := (while B S) (at level 97).
 Notation "'For'(' A ; B ; C ) 'Do'{' S '}End'" := (A ;; while B ( S ;; C )) (at level 97).
-Notation "'If'(' B ) 'Then'{' S '}End'" := (ifthen B S) (at level 97).
-Notation "'If'(' B ) 'Then'{' S1 '}Else'{' S2 '}End'" := (ifthenelse B S1 S2) (at level 97).
+Notation "'IF' '(' B ')' 'THEN' '(' S ')' 'END'" := (ifthen B S) (at level 97).
+Notation "'If' '(' B ')' 'Then' '(' S1 ')' 'Else' '(' S2 ')' 'End'" := (ifthenelse B S1 S2) (at level 97).
 
 Notation "'default:{' S };" := (case_default S) (at level 97).
 Notation "'case(' X ):{ S };" := (case_x X S) (at level 97).
@@ -416,12 +419,36 @@ Notation "'fun' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n ni
 Notation "'fun' F (( ))" := (fun_call F nil) (at level 89).
 
 
+Check Default_nat "i".
+Check NAT "x" ::= 0.
+Check BOOL "y" ::= b_true.
+Check STR "s" ::= "sum".
 
 
 
+Check 
+   "a" n:= 27 ;;  "b" n:= 3 ;;  "r" n:= 0 ;;
+  While
+      ( "b" )
+      {"r" n:= "a" %' "b" ;;
+       "a" n:= "b" ;;
+       "b" n:= "r" }.
 
+Check
+ (NAT "value" ::= 10) ;; 
+ (NAT "min" ::= 0 ) ;;
+ (NAT "max" ::= 100) ;;
+ If ( "max" <=' "value" )
+   Then ( "max" b:= "value" )
+   Else ( "min" b:= "value" )
+End.
 
-
+Check
+ (STR "sir1" ::= "PLP") ;;
+ (STR "sir2" ::= "Project") ;;
+ IF ( (len[ "sir1" ]) <' (len[ "sir2" ]) )
+    THEN ( "sir1" /+/ "sir2" )
+ END.
 
 
 
