@@ -118,13 +118,14 @@ Inductive BExp :=
 | b_more : AExp -> AExp -> BExp
 | b_less_eq : AExp -> AExp -> BExp
 | b_more_eq : AExp -> AExp -> BExp
+| b_equal : AExp -> AExp -> BExp
 | b_not : BExp -> BExp
 | b_and : BExp -> BExp -> BExp
 | b_or : BExp -> BExp -> BExp
 | b_xor : BExp -> BExp -> BExp.
 
 Coercion b_err : ErrString >-> BExp.
-Coercion b_var : string >-> BExp.
+(*Coercion b_var : string >-> BExp.*)
 
 (*Operations with boolean expressions*)
 
@@ -154,6 +155,13 @@ Definition more_eq_err (b1 b2 : ErrNat) : ErrBool :=
   | err_nat, _ => err_bool
   | _, err_nat => err_bool
   | num x, num y => boolean (negb (Nat.leb x y))
+ end.
+
+Definition equal_err (b1 b2 : ErrNat) : ErrBool :=
+ match b1, b2 with
+  | err_nat, _ => err_bool
+  | _, err_nat => err_bool
+  | num x, num y => boolean (Nat.eqb x y)
  end.
 
 Definition not_err (n : ErrBool) : ErrBool :=
@@ -327,6 +335,7 @@ Notation "A <' B" := (b_less A B) (at level 53).
 Notation "A >' B" := (b_more A B) (at level 53).
 Notation "A <=' B" := (b_less_eq A B) (at level 53).
 Notation "A >=' B" := (b_more_eq A B) (at level 53).
+Notation "A == B" := (b_equal A B) (at level 53).
 Notation " ! A " := (b_not A) (at level 71).
 Notation "A & B" := (b_and A B) (at level 75).
 Notation "A | B" := (b_or A B) (at level 75).
@@ -396,12 +405,12 @@ Notation "X s:= A" := (str_assign X A)(at level 90).
 
 
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
-Notation "S1 ; S2" := (secv S1 S2) (at level 93, right associativity).
+Notation "S1 ;.; S2" := (secv S1 S2) (at level 93, right associativity).
 
-Notation " 'While' '(' B ')' '{' S '}' " := (while B S) (at level 97).
-Notation "'For'(' A ; B ; C ) 'Do'{' S '}End'" := (A ;; while B ( S ;; C )) (at level 97).
-Notation "'IF' '(' B ')' 'THEN' '(' S ')' 'END'" := (ifthen B S) (at level 97).
+Notation " 'While' '(' B ')' '{' S '}' 'End' " := (while B S) (at level 97).
+Notation "'For' ( A ~ B ~ C ) 'Do' { S } 'End'" := (A ;; while B ( S ;; C )) (at level 97).
 Notation "'If' '(' B ')' 'Then' '(' S1 ')' 'Else' '(' S2 ')' 'End'" := (ifthenelse B S1 S2) (at level 97).
+Notation "'If'(' B ) 'Then'{' S '}End'" := (ifthen B S) (at level 97).
 
 Notation "'default:{' S };" := (case_default S) (at level 97).
 Notation "'case(' X ):{ S };" := (case_x X S) (at level 97).
@@ -415,8 +424,8 @@ Notation "'int' F (( p_1 , .. , p_n )){ S }" := (function F (cons p_1 .. (cons p
 Notation "'cin>>(' I )" := (cin I) (at level 92).
 Notation "'cout<<(' O )" := (cout O) (at level 92).
 
-Notation "'fun' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n nil) .. ) ) (at level 89).
-Notation "'fun' F (( ))" := (fun_call F nil) (at level 89).
+Notation "'f_call' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n nil) .. ) ) (at level 89).
+Notation "'f_call' F (( ))" := (fun_call F nil) (at level 89).
 
 
 Check Default_nat "i".
@@ -432,7 +441,16 @@ Check
       ( "b" )
       {"r" n:= "a" %' "b" ;;
        "a" n:= "b" ;;
-       "b" n:= "r" }.
+       "b" n:= "r" } End.
+
+Check
+    (NAT "sum" ::= 0) ;;
+    (BOOL "k" ::= b_true) ;;
+       For ( NAT "i" ::= 0 ~ "i" <=' (length("var") *' 3) ~ "i" n:= "i" +++ )
+         Do {
+           "sum" n:= "sum" +' "i" ;;
+            "k" b:= b_false
+            } End.
 
 Check
  (NAT "value" ::= 10) ;; 
@@ -446,16 +464,36 @@ End.
 Check
  (STR "sir1" ::= "PLP") ;;
  (STR "sir2" ::= "Project") ;;
- IF ( (len[ "sir1" ]) <' (len[ "sir2" ]) )
-    THEN ( "sir1" /+/ "sir2" )
- END.
+  If'( (length("sir1") ) >' (length("sir2") ) ) 
+  Then'{
+       BOOL "rez" ::= ("sir1")
+     }End.
 
 
+Check
 
+  Default_nat "i" ;.;
+  Default_bool "k" ;.;
+  int "printf" (("result")){
+   cout<<("result")
+} ;.;
 
-
-
-
+  int main(){
+    (NAT "max" ::= 0) ;; (NAT "min" ::=100) ;;
+    (NAT "contor" ::= 50) ;;
+    (NAT "n" ::= 1) ;;
+    If'("k") Then'{
+        "n" s:= "k"
+     }End ;;
+     While
+      ( ! ("k") )
+      { If ( "max" <=' "contor" )
+            Then ( "max" b:= "contor" ;; break )
+            Else ( "min" b:= "contor" )End 
+      } End ;;
+    f_call "printf"(( "max" )) ;;
+    f_call "printf"(( "min" ))
+  }.
 
 
 
