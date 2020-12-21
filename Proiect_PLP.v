@@ -317,6 +317,12 @@ Inductive Types :=
   | val_array : ErrArray -> Types
   | code : Statement -> Types. (* function code  *)
 
+
+Coercion val_nat: ErrNat >-> Types.
+Coercion val_bool: ErrBool >-> Types.
+Coercion val_string: ErrString >-> Types.
+Coercion val_pointer : ErrPointer >-> Types.
+Coercion val_array: ErrArray >-> Types.
 Coercion code : Statement >-> Types.
 
 
@@ -513,7 +519,6 @@ Check "x"[[2]] n-> [ 0, 1].
 Check "booleans"[[3]] b-> [true,true,false].
 Check "homework"[[2]] s-> ["project", "syntax"].
 
-Check "x"[['2']].
 
 
 (*Notations & examples for statements & functions *)
