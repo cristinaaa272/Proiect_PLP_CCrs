@@ -26,17 +26,18 @@ Inductive ErrString :=
   | err_string : ErrString
   | str : string -> ErrString.
 
-Inductive ErrPointer :=
- | err_pointer : ErrPointer
- | NULL : ErrPointer
- | pointer : string -> ErrPointer
- | reference : string -> ErrPointer .
+Inductive Pointer :=
+ | NULL : Pointer
+ | pointer : string -> Pointer
+ | reference : string -> Pointer .
 
-Scheme Equality for ErrPointer.
+Scheme Equality for Pointer.
 
 Coercion num: nat >-> ErrNat.
 Coercion boolean: bool >-> ErrBool.
 Coercion str: string >-> ErrString.
+Coercion pointer: string >-> Pointer.
+
 
 
 
@@ -55,30 +56,7 @@ Inductive STRexp :=
 Coercion str_var : string >-> STRexp.
 Coercion str_err : ErrString >-> STRexp.
 
-(*Operations with strings *)
 
-Definition str_length (s : ErrString) : ErrNat :=
- match s with 
-  | err_string => err_nat
-  | str s1 => num (length s1)
- end.
-
-Definition str_cat (s1 s2 : ErrString) : ErrString :=
- match s1,s2 with
-  | err_string, _ => err_string
-  | _, err_string => err_string
-  | str s1, str s2 => str (s1 ++ s2)
- end.
-
-Definition str_cmp (s1 s2 : ErrString) : ErrString :=
- match s1,s2 with 
-  | err_string, _ => err_string
-  | _, err_string => err_string
-  | str s1, str s2 =>
-     if (ltb (length s1) (length s2))
-     then s2
-     else s1
- end.
 
 (*Arithmetic expressions *)
 
@@ -97,9 +75,6 @@ Inductive AExp :=
 
 Coercion anum: ErrNat >-> AExp.
 Coercion avar: string >-> AExp. 
-
-(*Operations with arithmetic expressions *)
-
 
 
 
@@ -170,6 +145,7 @@ Inductive Statement :=
   | array_assign_n : string -> nat -> (list nat) -> Statement
   | array_assign_b : string -> nat -> (list bool) -> Statement
   | array_assign_s : string -> nat -> (list string) -> Statement 
+  | get_elem_array : string -> nat -> Statement
   | sequence : Statement  -> Statement  -> Statement 
   | cin : string -> Statement (*input -> variable *)
   | cout : STRexp -> Statement
@@ -177,6 +153,7 @@ Inductive Statement :=
   | for_new : Statement -> BExp -> Statement -> Statement
   | ifthen : BExp -> Statement -> Statement
   | ifthenelse : BExp -> Statement -> Statement -> Statement
+  | empty : Statement (*bloc gol*)
   | break : Statement
   | continue : Statement
   | switchcase : AExp -> list Case -> Statement
@@ -189,13 +166,13 @@ Inductive Statement :=
 
 Inductive Types :=
   | err : Types
-  | err_undecl : Types (*  Error - variable used undeclared *)
-  | err_assign : Types (* Error - declared a type , assigned other *)
-  | default : Types (* default value for a variable *)
+  | err_undecl : Types 
+  | err_assign : Types 
+  | default : Types 
   | val_nat : ErrNat -> Types (*valorile pe care le atribui unei variabile declarate  nat*)
-  | val_bool : ErrBool -> Types (* -|| de tip bool *)
-  | val_string : ErrString -> Types (* -||- de tip string *)
-  | val_pointer : ErrPointer -> Types
+  | val_bool : ErrBool -> Types 
+  | val_string : ErrString -> Types 
+  | val_pointer : nat -> bool -> Types
   | val_array : ErrArray -> Types
   | code : Statement -> Types. (* function code  *)
 
@@ -203,69 +180,238 @@ Inductive Types :=
 Coercion val_nat : ErrNat >-> Types.
 Coercion val_bool : ErrBool >-> Types.
 Coercion val_string : ErrString >-> Types.
-Coercion val_pointer : ErrPointer >-> Types.
 Coercion val_array : ErrArray >-> Types.
 Coercion code : Statement >-> Types.
+
+Definition get_statement (cod : Types) : Statement :=
+match cod with
+| code statement => statement
+| _ => empty
+end.
+
 
 
 (*Inductive type for functions *)
 
 Inductive Pgm :=
 | secv : Pgm -> Pgm -> Pgm (*Secventa de funcii si/sau declaratii de variabile *)
-| default_nat_decl : string -> Pgm (*declarare nat cu valoare default*)
-| default_bool_decl : string -> Pgm (*declarare int cu valoare default*)
-| default_string_decl : string -> Pgm (*declarare string cu valoare default*)
-| default_array_decl : string -> nat -> Pgm (*declarare aray cu valoare default*)
-| default_ptr_decl : string -> Pgm (*declarare pointer cu valoare default*)
-| main : Statement -> Pgm (* main function - no parameters *)
-| function : string -> list string -> Statement -> Pgm. (* functions *)
+| default_nat_decl : string -> Pgm 
+| default_bool_decl : string -> Pgm 
+| default_string_decl : string -> Pgm 
+| default_array_decl : string -> nat -> Pgm 
+| default_ptr_decl : string -> Pgm 
+| main : Statement -> Pgm 
+| function : string -> list string -> Statement -> Pgm. 
 
-(* Default values types - used for variables of different types outside a function *)
+
+
+Definition type_equality  (t1 : Types)(t2 : Types) : bool :=
+ match t1 with 
+ | err => match t2 with
+         | err => true
+         | _ => false
+         end
+ | err_undecl => match t2 with 
+                 | err_undecl => true
+                 | _ => false
+                end
+ | err_assign => match t2 with 
+                 | err_assign => true
+                 | _ => false
+                end
+ | default => match t2 with 
+                 | default => true
+                 | _ => false
+                end
+ | val_nat a => match t2 with
+              | val_nat b => true
+              | _ => false
+              end
+ | val_bool b1 => match t2 with
+              | val_bool b2 => true
+              | _ => false
+              end
+ | val_string s1 => match t2 with
+              | val_string s2 => true
+              | _ => false
+              end
+ | val_pointer p1 p2 => match t2 with
+                    | val_pointer p1' p2' => true
+                    | _ => false
+                     end
+ | val_array v1 => match t2 with
+                   | val_array v2 => true
+                   | _ => false
+                   end
+ | code _x => match t2 with
+                  | code _x => true
+                  | _ => false
+                 end
+  end.
+
+
+
 
 Definition Memory := nat -> Types.
 Definition Adress := string -> nat.
 Inductive MemLayer := 
-| pair : Adress -> Memory -> nat -> MemLayer.
-Notation "<< A , M , N >>" := (pair A M N) (at level 0).
+| pair : Adress -> Memory -> nat -> Adress -> Memory -> nat -> MemLayer.
+Notation "{< A1 , M1 , N1 >} -> {< A2 , M2 , N2 >}" := (pair A1 M1 N1 A2 M2 N2) (at level 0).
 
-Definition get_adress (m : MemLayer) (v : string) : nat :=
+
+
+
+Definition local (m : MemLayer) (v : string) : bool :=
 match m with
-| pair adr _ _ => adr v
+| pair adr1 mem1 _ adr2 mem2 _ => if (type_equality ( mem1 (adr1 v) ) err) 
+                              then false 
+                              else true
 end.
 
 Definition get_value (m : MemLayer) (v : string) : Types :=
-  match m with
-   | pair adr mem _ => mem (adr v)
- end.
+match m with
+| pair adr1 mem1 _ adr2 mem2 _ => if (local m v) 
+                              then mem1(adr1 v) 
+                              else mem2(adr2 v)
+end.
 
-Definition get_top (m : MemLayer) : nat :=
-  match m with
-   | pair _ _ val => val
-   end.
+Definition pointer_adress (a : Types) : nat :=
+match a with
+| val_pointer p _ => p
+| _ => 0
+end.
 
+Definition pointer_value (m : MemLayer) (p : string) : Types :=
+let pointer := get_value m p in
+match pointer with
+| val_pointer val local => match m with
+                    | pair _ mem1 _ _ mem2 _ => if (local) 
+                                                then (mem1 (pointer_adress pointer) )
+                                                else (mem2 (pointer_adress pointer) )
+                    end 
+| _ => err
+end.
 
+Definition get_local_top (m : MemLayer) : nat :=
+match m with
+| pair _ _ maxval _ _ _  => maxval
+end.
+
+Definition get_global_top (m : MemLayer) : nat :=
+match m with
+| pair _ _ _ _ _ maxval  => maxval
+end.
+
+Definition get_adress (m : MemLayer) (v : string) : nat :=
+match m with
+| pair adr1 _ _ adr2 _ _ => if (Nat.eqb (adr1 v) 0) 
+                            then adr2 v 
+                             else adr1 v
+end.
+
+Definition get_local_adress (m : MemLayer) (v : string) : nat :=
+match m with
+| pair adress _ _ _ _ _ => adress v
+end.
+
+Definition get_global_adress (m : MemLayer) (v : string) : nat :=
+match m with
+| pair _ _ _ adress _ _ => adress v
+end.
 
 Definition update_adress (st : Adress) (v : string) (n : nat) : Adress := 
- fun x => if (string_beq x v) then n else st x.
+fun x => if (string_beq x v) 
+         then n 
+         else st x.
 
 Definition update_memory (mem : Memory) (n : nat) (val : Types) : Memory :=
-fun x => if (Nat.eqb x n) then val else mem x. 
+fun n' => if (Nat.eqb n' n) 
+          then val 
+          else mem n'. 
 
-Definition update (M : MemLayer) (V : string) (T : Types) (pos : nat) : MemLayer :=
+
+Definition update_local_mem (M : MemLayer) (V : string) (T : Types) (nr : nat) : MemLayer :=
 match M with
-|<< a, mem, x >> => if (andb (Nat.eqb pos (get_adress M V) ) (Nat.eqb pos 0) ) 
-                  then << a, mem, x >> 
-                  else << update_adress a V pos, update_memory mem pos T, 
-                          (if (Nat.ltb pos x) then x else Nat.add x 1) >>
+|{<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+      => 
+          if (andb (Nat.eqb nr (get_local_adress M V) ) (Nat.eqb nr 0) ) 
+          then {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+          else {<update_adress adr1 V nr, update_memory mem1 nr T, 
+            (if (Nat.ltb nr top1) then top1 else Nat.add top1 1)>} -> {<adr2, mem2, top2>}
+end.
+
+Definition update_global_mem (M : MemLayer) (V : string) (T : Types) (nr : nat) : MemLayer :=
+match M with
+|{<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+    => 
+      if (andb (Nat.eqb nr (get_global_adress M V) ) (Nat.eqb nr 0) ) 
+      then {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+       else
+       {<adr1, mem1, top1>} -> {<update_adress adr2 V nr, update_memory mem2 nr T, 
+      (if (Nat.ltb nr top2) then top2 else Nat.add top2 1) >}
+end.
+
+Definition update_local_at_adress (M : MemLayer) (addr : nat) (T : Types): MemLayer :=
+match M with
+|{<adr1, mem1, top1>} -> {<adr2, mem2, top2>}
+     => 
+     if (Nat.eqb addr 0) 
+     then {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+     else {<adr1, update_memory mem1 addr T, top1 >} -> {<adr2, mem2, top2>}
+end.
+
+Definition update_global_at_adress (M : MemLayer) (addr : nat) (T : Types): MemLayer :=
+match M with
+|{<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+     => 
+     if (Nat.eqb addr 0) 
+     then {<adr1, mem1, top1>} -> {<adr2, mem2, top2>}
+     else {<adr1, mem1, top1>} -> {<adr2, update_memory mem2 addr T, top2 >}
+end.
+
+Definition update_at_adress (M : MemLayer) (addr : nat) (T : Types) : MemLayer :=
+match M with
+|{<adr1, mem1, top1>} -> {<adr2, mem2, top2>} 
+      =>  
+       if (type_equality (mem1 addr) err)
+       then update_global_at_adress M addr T
+       else update_local_at_adress M addr T
+end.
+
+Definition mem_default : Memory := fun x => err.
+Definition adress_default : Adress := fun x => 0.
+Definition stack_default := {<adress_default, mem_default, 1>} -> {<adress_default, mem_default, 1>}.
+
+Definition NewLocalStack (m : MemLayer) : MemLayer :=
+match m with
+| {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} => {<adress_default, mem_default, 1>} -> {<adr2, mem2, top2>}
 end.
 
 
-Definition mem_default : Memory := fun n => err.
-Definition adress_default : Adress := fun x => 0.
-Definition stack_default := <<adress_default, mem_default, 1>>.
+(*Operations with strings *)
 
+Definition str_length (s : ErrString) : ErrNat :=
+ match s with 
+  | err_string => err_nat
+  | str s1 => num (length s1)
+ end.
 
-(*String operations*)
+Definition str_cat (s1 s2 : ErrString) : ErrString :=
+ match s1,s2 with
+  | err_string, _ => err_string
+  | _, err_string => err_string
+  | str s1, str s2 => str (s1 ++ s2)
+ end.
+
+Definition str_cmp (s1 s2 : ErrString) : ErrString :=
+ match s1,s2 with 
+  | err_string, _ => err_string
+  | _, err_string => err_string
+  | str s1, str s2 =>
+     if (ltb (length s1) (length s2))
+     then s2
+     else s1
+ end.
 
 Definition Strlen (s : Types) :=
 match s with
@@ -291,6 +437,30 @@ match s1, s2 with
 | _, _ => err
 end.
 
+
+(*Notations for string operations*)
+
+Notation " len[ S ] " := (strlen S) (at level 31).
+Notation " S1 /+/ S2 " := (strcat S1 S2) (at level 30).
+Notation " S1 ? S2 " := (strcmp S1 S2) (at level 32).
+
+
+(*Semantics for string operations*)
+
+Reserved Notation "STR '=S[' St ']=>' N" (at level 60).
+Inductive streval_fun : STRexp -> MemLayer -> Types -> Prop :=
+| s_var : forall s sigma, str_var s =S[ sigma ]=> get_value sigma s
+| s_cmp : forall s1 s2 sigma s str1 str2,
+    s1 =S[ sigma ]=> str1 ->
+    s2 =S[ sigma ]=> str2 ->
+    s = Strcmp str1 str2 ->
+    s1 ? s2  =S[ sigma ]=> s
+| s_cat : forall s1 s2 sigma s st1 st2,
+    s1 =S[ sigma ]=> st1 ->
+    s2 =S[ sigma ]=> st2 ->
+    s =Strcat st1 st2 ->
+    s1 /+/ s2 =S[ sigma ]=> s
+where "STR '=S[' St ']=>' N" := (streval_fun STR St N).
 
 (*Arithmetic operations *)
 
@@ -356,6 +526,62 @@ match a with
                         end
 | _  => err
 end.
+
+(*Notations for arithmetic expressions*)
+
+Notation "A +' B" := (aplus A B)(at level 50, left associativity).
+Notation "A -' B" := (aminus A B)(at level 50, left associativity).
+Notation "A *' B" := (amul A B)(at level 48, left associativity).
+Notation "A /' B" := (adiv A B)(at level 48, left associativity).
+Notation "A %' B" := (amod A B)(at level 45, left associativity).
+Notation "A +++" := (ainc A) (at level 40,left associativity).
+Notation "A ---" := (adec A) (at level 49). 
+
+
+(*Semantics for arithmetic expressions*)
+
+Reserved Notation "A =[ S ]=> N" (at level 65).
+Inductive aeval_fun : AExp -> MemLayer -> Types -> Prop :=
+| e_const : forall n sigma, anum n =[ sigma ]=> val_nat n
+| e_avar : forall v sigma, avar v =[ sigma ]=> get_value sigma v
+| e_add : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = plus_err i1 i2 ->
+    a1 +' a2 =[ sigma ]=> n
+| e_minus : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = minus_err i1 i2 ->
+    a1 -' a2 =[ sigma ]=> n
+| e_mul : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = mul_err i1 i2 ->
+    a1 *' a2 =[ sigma ]=> n
+| e_div : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = div_err i1 i2 ->
+    a1 /' a2 =[ sigma ]=> n
+| e_mod : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = mod_err i1 i2 ->
+    a1 %' a2 =[ sigma ]=> n
+| e_inc : forall a1 i1 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    n = inc i1 ->
+    a1 +++  =[ sigma ]=> n
+| e_dec : forall a1 i1 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    n = dec i1 ->
+    a1 ---  =[ sigma ]=> n
+| e_strlen : forall a1 sigma s1 n,
+    a1 =S[ sigma ]=> s1 ->
+    n = Strlen s1 ->
+    len[ a1 ] =[ sigma ]=> n
+where "a =[ sigma ]=> n" := (aeval_fun a sigma n).
 
 
 (*Boolean operations*)
@@ -468,82 +694,8 @@ match b1, b2 with
 end.
 
 
-Notation " len[ S ] " := (strlen S) (at level 31).
-Notation " S1 /+/ S2 " := (strcat S1 S2) (at level 30).
-Notation " S1 ? S2 " := (strcmp S1 S2) (at level 32).
 
-
-Reserved Notation "STR '=S[' St ']=>' N" (at level 60).
-Inductive streval_fun : STRexp -> MemLayer -> Types -> Prop :=
-| s_var : forall s sigma, str_var s =S[ sigma ]=> get_value sigma s
-| s_cmp : forall s1 s2 sigma s str1 str2,
-    s1 =S[ sigma ]=> str1 ->
-    s2 =S[ sigma ]=> str2 ->
-    s = Strcmp str1 str2 ->
-    s1 ? s2  =S[ sigma ]=> s
-| s_cat : forall s1 s2 sigma s st1 st2,
-    s1 =S[ sigma ]=> st1 ->
-    s2 =S[ sigma ]=> st2 ->
-    s =Strcat st1 st2 ->
-    s1 /+/ s2 =S[ sigma ]=> s
-where "STR '=S[' St ']=>' N" := (streval_fun STR St N).
-
-
-
-Notation "A +' B" := (aplus A B)(at level 50, left associativity).
-Notation "A -' B" := (aminus A B)(at level 50, left associativity).
-Notation "A *' B" := (amul A B)(at level 48, left associativity).
-Notation "A /' B" := (adiv A B)(at level 48, left associativity).
-Notation "A %' B" := (amod A B)(at level 45, left associativity).
-Notation "A +++" := (ainc A) (at level 40,left associativity).
-Notation "A ---" := (adec A) (at level 49). 
-
-
-
-Reserved Notation "A =[ S ]=> N" (at level 65).
-Inductive aeval_fun : AExp -> MemLayer -> Types -> Prop :=
-| e_const : forall n sigma, anum n =[ sigma ]=> val_nat n
-| e_avar : forall v sigma, avar v =[ sigma ]=> get_value sigma v
-| e_add : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
-    n = plus_err i1 i2 ->
-    a1 +' a2 =[ sigma ]=> n
-| e_minus : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
-    n = minus_err i1 i2 ->
-    a1 -' a2 =[ sigma ]=> n
-| e_mul : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
-    n = mul_err i1 i2 ->
-    a1 *' a2 =[ sigma ]=> n
-| e_div : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
-    n = div_err i1 i2 ->
-    a1 /' a2 =[ sigma ]=> n
-| e_mod : forall a1 a2 i1 i2 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    a2 =[ sigma ]=> i2 ->
-    n = mod_err i1 i2 ->
-    a1 %' a2 =[ sigma ]=> n
-| e_inc : forall a1 i1 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    n = inc i1 ->
-    a1 +++  =[ sigma ]=> n
-| e_dec : forall a1 i1 sigma n,
-    a1 =[ sigma ]=> i1 ->
-    n = dec i1 ->
-    a1 ---  =[ sigma ]=> n
-| e_strlen : forall a1 sigma s1 n,
-    a1 =S[ sigma ]=> s1 ->
-    n = Strlen s1 ->
-    len[ a1 ] =[ sigma ]=> n
-where "a =[ sigma ]=> n" := (aeval_fun a sigma n).
-
-
+(*Semantics for boolean expressions*)
 
 Reserved Notation "B ={ S }=> B'" (at level 70).
 Inductive beval_fun : BExp -> MemLayer -> Types -> Prop :=
@@ -605,6 +757,7 @@ Inductive beval_fun : BExp -> MemLayer -> Types -> Prop :=
    b_xor b1 b2 ={ sigma }=> t
 where "B ={ S }=> B'" := (beval_fun B S B').
 
+(*Notations for boolean expressions*)
 
 Notation "A <' B" := (b_less A B) (at level 53).
 Notation "A >' B" := (b_more A B) (at level 53).
@@ -618,48 +771,11 @@ Notation "A | B" := (b_or A B) (at level 75).
 Notation "A ^^ B" := (b_xor A B) (at level 60).
 
 
-Definition stack_1 := update stack_default "x" (boolean true) (get_top stack_default).
-Definition stack_2 := update stack_1 "y" (boolean false) (get_top stack_1).
-Compute get_adress stack_2 "x".
-Compute get_adress stack_2 "y".
-
-
-
-(*Examples for arithmetic expressions *)
-
-Check (2 +' 3 *' 5).
-Check (2 +' 3 *' "n").
-Check ("sum" /' "sum"---).
-Check ("i" +++).
-Check (3 %' 0).
-
-(*Examples for boolean expressions *)
-
-Check ( 3 >=' ("x" /' 0)) .
-Check (( ("a" +' 5) /' (("b" -'1) *' 3)) <=' 100 ).
-Check (( ! b_false ) & b_true).
-Check ( b_true | b_false | "sum" | ("a" <=' "b")).
-Check (b_true ^^ b_false).
-Check ("a" ^^ "b").
-
-
-(*Examples for string operations *)
-
-Check ("Info " /+/ "PLP") .
-Check (len[ "Proiect" ]).
-Check ("ab" ? "ba") .
-
-
-(*Notations & examples for arrays*)
+(*Notations for arrays*)
 Notation "[ ]" := nil (format "[ ]") : list_scope.
 Notation "[ x ]" := (cons x nil) : list_scope.
 Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
 
-
-Check  [1 , 3 , 5 , 8].
-Check [].
-Check [true , false].
-Check ["proiect" , "PLP"].
 
 Notation "'Nat_array' A '[(' X ')]' -> L " :=(array_decl_n A X L)(at level 4).
 Notation " A '[[' X ']]' n->  L  " := (array_assign_n A X L) (at level 30).
@@ -674,18 +790,9 @@ Notation " S '[[' X ']]' s->  L  " := (array_assign_s S X L) (at level 30).
 Notation " s [[' i ']] " := (elem s i)(at level 22).
 
 
-Check Nat_array "x"[(2)] -> [100 , 100].
-Check Bool_array "booleans"[(3)] -> [false, false, false].
-Check Str_array "homework"[(2)] -> ["PLP","Part1"].
-
-Check "x"[[2]] n-> [ 0, 1].
-Check "booleans"[[3]] b-> [true,true,false].
-Check "homework"[[2]] s-> ["project", "syntax"].
-
-Check "x"[['2']].
 
 
-(*Notations & examples for statements & functions *)
+(*Notations for statements & functions *)
 
 Notation " A **" := (pointer A)(at level 30).
 Notation "&& A" := (reference A )(at level 30).
@@ -715,6 +822,7 @@ Notation "X s:= A" := (str_assign X A)(at level 90).
 Notation "X p:= '**' A" := (ptr_assign X A)(at level 90).
 Notation "X r:= '&&' A" := (ref_assign X A)(at level 90).
 
+Notation "V [ P ]" := (get_elem_array V P)(at level 79).
 
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "S1 ;.; S2" := (secv S1 S2) (at level 93, right associativity).
@@ -729,8 +837,11 @@ Notation "'case(' X ):{ S };" := (case X S) (at level 97).
 Notation "'SWITCH' '(' Y ){ case_1 .. case_n '}'" := (switchcase Y (cons case_1 .. (cons case_n nil) .. )) (at level 40).
 
 Notation "'int' 'main()' { S }" := (main S)(at level 90). 
+Notation "'int' 'main()' { }" := (main empty)(at level 95).
 Notation "'int' F (){ S }" := (function F nil S)(at level 90).
+Notation "'int' F (){ }" := (function F nil empty)(at level 95).
 Notation "'int' F (( p_1 , .. , p_n )){ S }" := (function F (cons p_1 .. (cons p_n nil) .. ) S)(at level 90).
+Notation "'int' F (( p_1 , .. , p_n )){ }" := (function F (cons p_1 .. (cons p_n nil) .. ) empty)(at level 95).
 
 
 Notation "'cin>>(' I )" := (cin I) (at level 92).
@@ -739,6 +850,50 @@ Notation "'cout<<(' O )" := (cout O) (at level 92).
 Notation "'f_call' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n nil) .. ) ) (at level 89).
 Notation "'f_call' F (( ))" := (fun_call F nil) (at level 89).
 
+
+
+(*EXAMPLES*)
+(*String operations *)
+
+Check ("Info " /+/ "PLP") .
+Check (len[ "Proiect" ]).
+Check ("ab" ? "ba").
+
+(*Arithmetic expressions *)
+
+Check (2 +' 3 *' 5).
+Check (2 +' 3 *' "n").
+Check ("sum" /' "sum"---).
+Check ("i" +++).
+Check (3 %' 0).
+
+(*Boolean expressions *)
+
+Check ( 3 >=' ("x" /' 0) ) .
+Check ( ( ("a" +' 5) /' ( ("b" -'1) *' 3) ) <=' 100 ).
+Check ( ( ! b_false ) & b_true).
+Check ( b_true | b_false | "sum" | ("a" <=' "b") ).
+Check (b_true ^^ b_false).
+Check ("a" ^^ "b").
+
+(*Arrays*)
+Check  [1 , 3 , 5 , 8].
+Check [].
+Check [true , false].
+Check ["proiect" , "PLP"].
+
+Check Nat_array "x"[(2)] -> [100 , 100].
+Check Bool_array "booleans"[(3)] -> [false, false, false].
+Check Str_array "homework"[(2)] -> ["PLP","Part1"].
+
+Check "x"[[2]] n-> [ 0, 1].
+Check "booleans"[[3]] b-> [true,true,false].
+Check "homework"[[2]] s-> ["project", "syntax"].
+
+Check "x"[['2']].
+
+
+(*Statements*)
 
 Check Default_nat "i".
 Check NAT "x" ::= 0.
@@ -826,56 +981,22 @@ Check (BOOL "new" ::= b_false) ;;
       ( "new" p:=** "ok" ) ;; ("ok" r:= && "new").
 
 
+(*SEMANTICS*)
+
+Definition stack_1 := update_local_mem stack_default "x" (num 3) (get_local_top stack_default).
+Definition stack_2 := update_local_mem stack_1 "y" (num 5) (get_local_top stack_1).
+Compute get_local_adress stack_2 "x".
+Compute get_local_adress stack_2 "y".
 
 
-
-(*
-
-
-Definition type_equality  (t1 : Types)(t2 : Types) : bool :=
- match t1 with 
- | err_undecl => match t2 with 
-                 | err_undecl => true
-                 | _ => false
-                end
- | err_assign => match t2 with 
-                 | err_assign => true
-                 | _ => false
-                end
- | default => match t2 with 
-                 | default => true
-                 | _ => false
-                end
- | val_nat a => match t2 with
-              | val_nat b => true
-              | _ => false
-              end
- | val_bool b1 => match t2 with
-              | val_bool b2 => true
-              | _ => false
-              end
- | val_string s1 => match t2 with
-              | val_string s2 => true
-              | _ => false
-              end
- | val_pointer p1 => match t2 with
-                    | val_pointer p2 => true
-                    | _ => false
-                     end
- | val_array v1 => match t2 with
-                   | val_array v2 => true
-                   | _ => false
-                   end
- | code _x => match t2 with
-                  | code _x => true
-                  | _ => false
-                 end
-  end.
-
-Compute (type_equality err_undecl err_assign ).
-Compute (type_equality (val_nat 100) (val_bool false)).
-Compute (type_equality (val_string "s1") (val_string "s2")).*)
-
+Example ex_1 : "x" +' "y" =[ stack_2 ]=> val_nat 8.
+Proof.
+  eapply e_add.
+  -eapply e_avar.
+    -simpl.
+    +eapply e_avar.
+    -simpl. reflexivity.
+Qed.
 
 
 
