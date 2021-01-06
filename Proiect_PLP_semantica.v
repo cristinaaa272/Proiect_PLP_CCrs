@@ -31,6 +31,9 @@ Inductive Pointer :=
  | pointer : string -> Pointer
  | reference : string -> Pointer .
 
+(* in C un pointer poate fi asignat/declarat doar cu trei tipuri de valori: un alt pointer, referinta unei variabile
+sau NULL*)
+
 Scheme Equality for Pointer.
 
 Coercion num: nat >-> ErrNat.
@@ -49,6 +52,7 @@ Check "x".
 
 Inductive STRexp :=
  | str_err : ErrString -> STRexp
+ | str_const : ErrString -> STRexp
  | str_var : string -> STRexp
  | strcmp : STRexp -> STRexp -> STRexp
  | strcat : STRexp -> STRexp -> STRexp.
@@ -104,7 +108,6 @@ Coercion b_err : ErrString >-> BExp.
 (*Arrays*)
 
 
-
 Inductive ErrArray :=
  | err_array : ErrArray
  | array_n : string -> nat -> (list nat) -> ErrArray
@@ -115,13 +118,13 @@ Inductive ErrArray :=
 
 (* Array operations *)
 
-Inductive Array_opp :=
- | arr_len : ErrArray -> Array_opp
- | elem : string -> nat -> Array_opp
- | delete : string -> nat -> Array_opp
- | min : ErrArray -> Array_opp
- | max : ErrArray -> Array_opp.
-
+Inductive ARRAY_exp :=
+ | arr_const : ErrArray -> ARRAY_exp
+ | arr_var : string -> ARRAY_exp
+ | elem : ErrArray -> nat -> ARRAY_exp
+ | delete : string -> nat -> ARRAY_exp
+ | first_elem : ErrArray -> ARRAY_exp
+ | last_elem : ErrArray -> ARRAY_exp.
 
 
 (*Statements*)
@@ -130,27 +133,24 @@ Inductive Statement :=
   | nat_decl: string -> AExp -> Statement 
   | bool_decl: string -> BExp -> Statement 
   | str_decl : string -> STRexp -> Statement
-  | array_decl_n : string -> nat -> (list nat) -> Statement
-  | array_decl_b : string -> nat  -> (list bool) -> Statement
-  | array_decl_s : string -> nat -> (list string) -> Statement
+  | array_decl : ErrArray -> Statement
   | ptr_nat_decl : string -> string -> Statement
   | ptr_bool_decl : string -> string -> Statement
   | ptr_string_decl : string -> string -> Statement
   | ref_decl : string -> string -> Statement
   | nat_assign : string -> AExp -> Statement 
   | bool_assign : string -> BExp -> Statement
-  | str_assign : string -> string -> Statement
-  | ptr_assign : string -> string -> Statement
+  | str_assign : string -> STRexp -> Statement
+  | ptr_assign_n : string -> AExp -> Statement
+  | ptr_assign_b : string -> BExp -> Statement
+  | ptr_assign_s : string -> STRexp -> Statement
   | ref_assign : string -> string -> Statement
-  | array_assign_n : string -> nat -> (list nat) -> Statement
-  | array_assign_b : string -> nat -> (list bool) -> Statement
-  | array_assign_s : string -> nat -> (list string) -> Statement 
   | get_elem_array : string -> nat -> Statement
   | sequence : Statement  -> Statement  -> Statement 
   | cin : string -> Statement (*input -> variable *)
   | cout : STRexp -> Statement
   | while : BExp -> Statement -> Statement
-  | for_new : Statement -> BExp -> Statement -> Statement
+  | for_new : Statement -> BExp -> Statement -> Statement -> Statement
   | ifthen : BExp -> Statement -> Statement
   | ifthenelse : BExp -> Statement -> Statement -> Statement
   | empty : Statement (*bloc gol*)
@@ -160,7 +160,7 @@ Inductive Statement :=
   | fun_call : string -> (list string) -> Statement (*apel de functie cu o serie de parametrii *)
    with Case :=
     | case_default : Statement -> Case
-    | case : AExp -> Statement -> Case.
+    | case : ErrNat -> Statement -> Case.
 
 
 
@@ -382,7 +382,7 @@ Definition mem_default : Memory := fun x => err.
 Definition adress_default : Adress := fun x => 0.
 Definition stack_default := {<adress_default, mem_default, 1>} -> {<adress_default, mem_default, 1>}.
 
-Definition NewLocalStack (m : MemLayer) : MemLayer :=
+Definition stack_local (m : MemLayer) : MemLayer :=
 match m with
 | {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} => {<adress_default, mem_default, 1>} -> {<adr2, mem2, top2>}
 end.
@@ -449,6 +449,7 @@ Notation " S1 ? S2 " := (strcmp S1 S2) (at level 32).
 
 Reserved Notation "STR '=S[' St ']=>' N" (at level 60).
 Inductive streval_fun : STRexp -> MemLayer -> Types -> Prop :=
+| s_const : forall s sigma, str_const s =S[ sigma ]=> val_string s
 | s_var : forall s sigma, str_var s =S[ sigma ]=> get_value sigma s
 | s_cmp : forall s1 s2 sigma s str1 str2,
     s1 =S[ sigma ]=> str1 ->
@@ -461,6 +462,48 @@ Inductive streval_fun : STRexp -> MemLayer -> Types -> Prop :=
     s =Strcat st1 st2 ->
     s1 /+/ s2 =S[ sigma ]=> s
 where "STR '=S[' St ']=>' N" := (streval_fun STR St N).
+
+(*Semantics for Arrays*)
+
+Definition get_elem (a : ErrArray) (nr : nat) : Types :=
+match a with
+| array_n s n l => val_nat (List.nth nr l 0)  
+| array_b s n l => val_bool (List.nth nr l false) 
+| array_s s n l => val_string (List.nth nr l "") 
+| err_array => err_undecl
+end.
+
+Definition get_last_elem (a : ErrArray) : Types :=
+match a with 
+| array_n s n l => val_nat (List.last l 0)
+| array_b s n l => val_bool (List.last l false)
+| array_s s n l => val_string (List.last l "")
+| err_array => err_undecl
+end.
+Definition delete_elem (a : ErrArray) (nr : nat) : Types :=
+match a with
+| array_n s n l => val_array (array_n s n (List.remove eq_nat_dec (List.nth nr l 0) l))
+| array_b s n l => val_array (array_b s n (List.remove bool_dec (List.nth nr l false) l))
+| array_s s n l => val_array (array_s s n (List.remove string_dec (List.nth nr l "") l))
+| err_array => err_undecl
+end.
+
+
+
+
+(*Reserved Notation "ARR '~[' St ']~>' N" (at level 60).
+Inductive array_eval: ARRAY_exp -> MemLayer -> Types -> Prop :=
+| arr_Const: forall a sigma ,
+  arr_const a ~[ sigma ]~> val_array a
+| arr_Var: forall a sigma mem ,
+  arr_var a ~[ sigma ]~> (mem(sigma a))
+| arr_elem: forall a nr rez sigma ,
+   rez = (get_elem a nr)
+ ( elem a nr) ~[ sigma ]~> rez
+where "ARR '~[' St ']~>' N" := (array_eval ARR St N).*)
+
+
+
 
 (*Arithmetic operations *)
 
@@ -757,6 +800,165 @@ Inductive beval_fun : BExp -> MemLayer -> Types -> Prop :=
    b_xor b1 b2 ={ sigma }=> t
 where "B ={ S }=> B'" := (beval_fun B S B').
 
+
+Definition to_bool (b : Types) : bool :=
+match b with
+| val_bool b' => match b' with
+                 |boolean true => true
+                 |boolean false => false
+                 |errBool => false
+                 end
+| _ => false
+end.
+
+Notation "'default:{' S };" := (case_default S) (at level 97).
+Notation "'case(' X ):{ S };" := (case X S) (at level 97).
+
+Definition get_case_Stmt (C : Case) : Statement :=
+match C with
+| default:{ s }; => s
+| case( _ ):{ s }; => s
+end.
+
+Definition check_case (C : Case ) (n : Types) : bool :=
+match C with
+| default:{ _ }; => true
+| case( a ):{ _ }; => to_bool (equal_err a n)
+end.
+
+Fixpoint execute_switchcase (n : Types) (cl : list Case) : Statement :=
+match n with
+| val_nat n' => match cl with 
+              | nil => empty
+              | x :: next => if (check_case x n) then (get_case_Stmt x) else (execute_switchcase n next)
+              end
+| _ => empty
+end.
+
+
+Reserved Notation " L -{ M , S }-> M' , S'" (at level 60).
+Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -> Prop :=
+| e_nat_decl : forall s x value sigma sigma' new,
+    value =[ sigma ]=> x ->
+    sigma' = update_local_mem sigma s x (get_local_top sigma) ->
+    ( nat_decl s value )-{ sigma , new }-> sigma' , new
+| e_bool_decl : forall s b value sigma sigma' new,
+    value ={ sigma }=> b ->
+    sigma' = update_local_mem sigma s b (get_local_top sigma) ->
+    ( bool_decl s value)-{ sigma , new }-> sigma' , new
+| e_str_decl : forall s value sigma sigma' str new,
+    value =S[ sigma ]=> str ->
+    sigma' = update_local_mem sigma s str (get_local_top sigma) ->
+    ( str_decl s value )-{ sigma , new }-> sigma' , new
+| e_ptr_nat_decl : forall P V sigma sigma' loc new,
+    type_equality (get_value sigma V) (val_nat 0) = true ->
+    loc = local sigma V ->
+    sigma' = update_local_mem sigma P (val_pointer (get_adress sigma V) loc) (get_local_top sigma) ->
+    ( ptr_nat_decl P V )-{ sigma , new }-> sigma', new
+| e_ptr_bool_decl : forall P V sigma sigma1 loc new,
+    type_equality (get_value sigma V) (val_bool false) = true ->
+    loc = local sigma V ->
+    sigma1 = update_local_mem sigma P (val_pointer (get_adress sigma V) loc) (get_local_top sigma) ->
+    ( ptr_bool_decl P V )-{ sigma , new }-> sigma1 , new
+| e_ptr_string_decl : forall P V sigma sigma1 loc new,
+    type_equality (get_value sigma V) (val_string ("") ) = true ->
+    loc = local sigma V -> 
+    sigma1 = update_local_mem sigma P (val_pointer (get_adress sigma V) loc) (get_local_top sigma) ->
+    ( ptr_string_decl P V )-{ sigma , new }-> sigma1 , new
+(* |e_array_decl
+   | e_ref_decl*)
+| e_nat_assign : forall s x value sigma sigma' new,
+    type_equality (get_value sigma s) (val_nat 0) = true ->
+    value =[ sigma ]=> x ->
+    sigma' = update_at_adress sigma (get_adress sigma s) x ->
+    ( nat_assign s value )-{ sigma , new }-> sigma' , new
+| e_bool_assign : forall s b value sigma sigma' new,
+    type_equality (get_value sigma s) (val_bool false) = true ->
+    value ={ sigma }=> b ->
+    sigma' = update_at_adress sigma (get_adress sigma s) b ->
+    ( bool_assign s value )-{ sigma , new }-> sigma' , new
+| e_str_assign : forall s value sigma sigma' sstr new,
+    type_equality (get_value sigma s) (val_string ("") ) = true ->
+    value =S[ sigma ]=> sstr ->
+    sigma' = update_at_adress sigma (get_adress sigma s) sstr  ->
+    ( str_assign s value )-{ sigma , new }-> sigma' , new 
+| e_ptrassign_n : forall V E i1 sigma sigma1 new,
+    type_equality (get_value sigma V) (val_pointer 0 false) = true ->
+    E =[ sigma ]=> i1 ->
+    sigma1 = update_at_adress sigma (pointer_adress (get_value sigma V) ) i1  ->
+    ( ptr_assign_n V E )-{ sigma , new }-> sigma1, new
+| e_ptrassign_b : forall V E i1 sigma sigma1 new,
+    type_equality (get_value sigma V) (val_pointer 0 false) = true ->
+    E ={ sigma }=> i1 ->
+    sigma1 = update_at_adress sigma (pointer_adress (get_value sigma V) ) i1 ->
+   ( ptr_assign_b V E )-{ sigma , new }-> sigma1 , new
+| e_ptrassign_s : forall V E i1 sigma sigma1 new,
+    type_equality (get_value sigma V) (val_pointer 0 false) = true ->
+    E =S[ sigma ]=> i1 ->
+    sigma1 = update_at_adress sigma (pointer_adress (get_value sigma V) ) i1  ->
+   ( ptr_assign_s V E )-{ sigma , new }-> sigma1 , new
+(*|e_ref_assign*)
+| e_sequence : forall s1 s2 sigma sigma' sigma'' new new',
+   ( s1 )-{ sigma , new }-> sigma' , new ->
+   ( s2 )-{ sigma' , new }-> sigma'' , new' ->
+   (sequence s1 s2 )-{ sigma , new }-> sigma'' , new'
+| e_while_false : forall b s sigma new,
+    b ={ sigma }=> false ->
+    ( while b s )-{ sigma , new }-> sigma , new
+| e_while_true : forall b s sigma sigma' new,
+    b ={ sigma }=> true ->
+    ( sequence s ( while b s ) )-{ sigma , new }-> sigma' , new ->
+    ( while b s )-{ sigma , new }-> sigma' , new
+| e_for_false : forall s b s1 s2 sigma sigma' new,
+    ( s )-{ sigma, new }-> sigma', new ->
+    b ={ sigma' }=> false ->
+    ( for_new s b s1 s2 )-{ sigma , new }-> sigma' , new
+| e_for_true : forall s b s1 s2 sigma sigma' sigma'' new,
+    ( s )-{ sigma , new }-> sigma', new ->
+    (while b ( sequence s2 s1) )-{ sigma' , new }-> sigma'' , new ->
+    ( for_new s b s1 s2 )-{ sigma , new }-> sigma'' , new
+| e_ifthen_false : forall b s1 sigma new,
+    b ={ sigma }=> false ->
+    ( ifthen b s1 )-{ sigma , new }-> sigma , new
+| e_ifthen_true : forall b s1 sigma sigma' new,
+    b ={ sigma }=> true ->
+    ( s1 )-{ sigma , new }-> sigma' , new ->
+    ( ifthen b s1 )-{ sigma , new }-> sigma' , new
+| e_ifthenelse_false : forall b s1 s2 sigma sigma' new,
+    b ={ sigma }=> false ->
+    ( s2 )-{ sigma , new }-> sigma' , new ->
+    ( ifthenelse b s1 s2 )-{ sigma , new }-> sigma' , new
+| e_ifthenelse_true : forall b s1 s2 sigma sigma' new,
+    b ={ sigma }=> true ->
+    ( s1 )-{ sigma , new }-> sigma' , new ->
+    ( ifthenelse b s1 s2 )-{ sigma , new }-> sigma' , new
+| e_empty : forall sigma new,
+   ( empty )-{ sigma , new }-> sigma , new
+| e_break: forall sigma new,
+   ( break ) -{ sigma, new }-> sigma , new
+| e_break_case1 : forall b s n sigma new,
+    b ={ sigma }=> true ->
+    n = ( sequence break s) ->
+    ( sequence s ( while b n) ) -{ sigma, new }-> sigma, new ->
+    while b n -{ sigma, new }-> sigma, new
+| e_break_case2 : forall b s n sigma sigma' new,
+    b ={ sigma }=> true ->
+    n = ( sequence s break) ->
+    ( sequence s ( while b n)) -{ sigma, new }-> sigma' , new
+(*|e_continue*)
+| e_switchcase : forall a c sigma n v sigma' new,
+    a =[ sigma ]=> n ->
+    v = (execute_switchcase n c) ->
+    v -{ sigma , new }-> sigma' , new ->
+   ( switchcase a c ) -{ sigma , new }-> sigma' , new
+| e_fun_call : forall s l stmt sigma sigma' new,
+    stmt = get_statement (get_value sigma s ) ->
+    ( stmt )-{ stack_local sigma , sigma}-> sigma' , new ->
+    ( fun_call s l )-{ sigma , new }-> sigma' , new
+where "L -{ M , S }-> M' , S'" := (eval_fun L M S M' S').
+
+
+
 (*Notations for boolean expressions*)
 
 Notation "A <' B" := (b_less A B) (at level 53).
@@ -777,15 +979,11 @@ Notation "[ x ]" := (cons x nil) : list_scope.
 Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
 
 
-Notation "'Nat_array' A '[(' X ')]' -> L " :=(array_decl_n A X L)(at level 4).
-Notation " A '[[' X ']]' n->  L  " := (array_assign_n A X L) (at level 30).
+Notation "Array'::= A" := (array_decl A ) (at level 58). 
 
-Notation "'Bool_array' B '[(' X ')]' -> L " :=(array_decl_b B X L)(at level 4).
-Notation " B '[[' X ']]' b->  L  " := (array_assign_b B X L) (at level 30).
-
-
-Notation "'Str_array' S '[(' X ')]' -> L " :=(array_decl_s S X L)(at level 4).
-Notation " S '[[' X ']]' s->  L  " := (array_assign_s S X L) (at level 30).
+Notation " A '[[' X ']]' n->  L  " := (array_n A X L) (at level 30).
+Notation " B '[[' X ']]' b->  L  " := (array_b B X L) (at level 30).
+Notation " S '[[' X ']]' s->  L  " := (array_s S X L) (at level 30).
 
 Notation " s [[' i ']] " := (elem s i)(at level 22).
 
@@ -819,8 +1017,11 @@ Notation "'Default_ptr' P" := (default_ptr_decl P) (at level 90).
 Notation "X n:= A" := (nat_assign X A)(at level 80).
 Notation "X b:= A" := (bool_assign X A)(at level 90).
 Notation "X s:= A" := (str_assign X A)(at level 90).
-Notation "X p:= '**' A" := (ptr_assign X A)(at level 90).
+Notation "X p:= 'n*' A" := (ptr_assign_n X A)(at level 90).
+Notation "X p:= 'b*' A" := (ptr_assign_b X A)(at level 90).
+Notation "X p:= 's*' A" := (ptr_assign_s X A)(at level 90).
 Notation "X r:= '&&' A" := (ref_assign X A)(at level 90).
+
 
 Notation "V [ P ]" := (get_elem_array V P)(at level 79).
 
@@ -850,6 +1051,8 @@ Notation "'cout<<(' O )" := (cout O) (at level 92).
 Notation "'f_call' F (( p_1 , .. , p_n ))" := (fun_call F (cons p_1 .. (cons p_n nil) .. ) ) (at level 89).
 Notation "'f_call' F (( ))" := (fun_call F nil) (at level 89).
 
+
+(*Semantics for statements*)
 
 
 (*EXAMPLES*)
@@ -882,15 +1085,13 @@ Check [].
 Check [true , false].
 Check ["proiect" , "PLP"].
 
-Check Nat_array "x"[(2)] -> [100 , 100].
-Check Bool_array "booleans"[(3)] -> [false, false, false].
-Check Str_array "homework"[(2)] -> ["PLP","Part1"].
+Check Array'::= "a" [[10]] n-> [1, 2].
 
 Check "x"[[2]] n-> [ 0, 1].
 Check "booleans"[[3]] b-> [true,true,false].
 Check "homework"[[2]] s-> ["project", "syntax"].
 
-Check "x"[['2']].
+
 
 
 (*Statements*)
@@ -973,12 +1174,12 @@ Check
 Check Default_ptr "NULL".
 Check  "a" := && "b".
 
-Check ( "nat_pointer" := NAT** "n") ;; ( "n" p:= ** "p")  .
+Check ( "nat_pointer" := NAT** "n") ;; ( "n" p:= n* "p")  .
 Check ( "bool_pointer" := BOOL** "bool") ;; ( "bool" r:= && "b_true").
 Check  ( "string_pointer" := STR** "str")  ;; ("str" r:= && "syntax").
 
 Check (BOOL "new" ::= b_false) ;;
-      ( "new" p:=** "ok" ) ;; ("ok" r:= && "new").
+      ( "new" p:=b* "ok" ) ;; ("ok" r:= && "new").
 
 
 (*SEMANTICS*)
