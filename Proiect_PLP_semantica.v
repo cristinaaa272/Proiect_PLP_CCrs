@@ -380,9 +380,9 @@ end.
 
 Definition mem_default : Memory := fun x => err.
 Definition adress_default : Adress := fun x => 0.
-Definition stack_default := {<adress_default, mem_default, 1>} -> {<adress_default, mem_default, 1>}.
+Definition env_default := {<adress_default, mem_default, 1>} -> {<adress_default, mem_default, 1>}.
 
-Definition stack_local (m : MemLayer) : MemLayer :=
+Definition env_local (m : MemLayer) : MemLayer :=
 match m with
 | {<adr1, mem1, top1>} -> {<adr2, mem2, top2>} => {<adress_default, mem_default, 1>} -> {<adr2, mem2, top2>}
 end.
@@ -953,7 +953,7 @@ Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -
    ( switchcase a c ) -{ sigma , new }-> sigma' , new
 | e_fun_call : forall s l stmt sigma sigma' new,
     stmt = get_statement (get_value sigma s ) ->
-    ( stmt )-{ stack_local sigma , sigma}-> sigma' , new ->
+    ( stmt )-{ env_local sigma , sigma}-> sigma' , new ->
     ( fun_call s l )-{ sigma , new }-> sigma' , new
 where "L -{ M , S }-> M' , S'" := (eval_fun L M S M' S').
 
@@ -1014,7 +1014,7 @@ Notation "'Default_str' S" := (default_string_decl S) (at level 90).
 Notation "'Default_arr' A '[(' X ')]'" := (default_array_decl A X) (at level 90).
 Notation "'Default_ptr' P" := (default_ptr_decl P) (at level 90).
 
-Notation "X n:= A" := (nat_assign X A)(at level 80).
+Notation "X n:= A" := (nat_assign X A)(at level 90).
 Notation "X b:= A" := (bool_assign X A)(at level 90).
 Notation "X s:= A" := (str_assign X A)(at level 90).
 Notation "X p:= 'n*' A" := (ptr_assign_n X A)(at level 90).
@@ -1184,13 +1184,32 @@ Check (BOOL "new" ::= b_false) ;;
 
 (*SEMANTICS*)
 
-Definition stack_1 := update_local_mem stack_default "x" (num 3) (get_local_top stack_default).
-Definition stack_2 := update_local_mem stack_1 "y" (num 5) (get_local_top stack_1).
-Compute get_local_adress stack_2 "x".
-Compute get_local_adress stack_2 "y".
+Definition env_1 := update_local_mem env_default "x" (num 3) (get_local_top env_default).
+Definition env_2 := update_local_mem env_1 "y" (num 5) (get_local_top env_1).
+Definition env_3 := update_local_mem env_1 "value" (val_bool false) (get_local_top env_1).
+
+Compute get_local_adress env_2 "x".
+Compute get_local_adress env_2 "y".
 
 
-Example ex_1 : "x" +' "y" =[ stack_2 ]=> val_nat 8.
+Example ex_1 : ("x" /' 0)  =[ env_default ]=> err.
+Proof.
+  eapply e_div.
+  - apply e_avar.
+  - apply e_const.
+  - simpl. reflexivity.
+Qed.
+
+Example ex_2 : (100 -' 50)  =[ env_default ]=> val_nat 50.
+Proof.
+  eapply e_minus.
+  -apply e_const.
+  -apply e_const.
+  -simpl. reflexivity.
+Qed.
+
+
+Example ex_3 : "x" +' "y" =[ env_2 ]=> val_nat 8.
 Proof.
   eapply e_add.
   -eapply e_avar.
@@ -1200,8 +1219,52 @@ Proof.
 Qed.
 
 
+Example ex_4: (b_true & b_false) ={ env_default }=> val_bool false.
+Proof.
+  eapply e_and_true.
+  -eapply e_true.
+  -eapply e_false.
+Qed.
 
 
+Example ex_5 : ( !(b_var "value") )  ={ env_3 }=> true.
+Proof.
+  eapply e_not_false.
+  - eapply e_bvar.
+Qed.
 
+
+Example ex_10 : exists env', ( (NAT "x" ::= 10) ;;
+                                "y" := NAT** "x"  ) -{ env_default , env_default }-> env' , env_default
+    /\ get_value env' "x" = pointer_value env' "y".
+
+Proof.
+  eexists.
+  split.
+  *eapply e_sequence.
+  -eapply e_nat_decl. eapply e_const. unfold local. simpl. trivial.
+    -eapply e_ptr_nat_decl.
+    +simpl. trivial.
+    + unfold local. simpl. trivial.
+    + unfold local. simpl. trivial.
+    *unfold local. simpl. trivial.
+Qed.
+
+Example ex_11 :  exists env', ( BOOL "x" ::= b_false ;; "x" b:= b_true )-{ env_default , env_default }-> env' , env_default
+    /\ get_value env' "x" = val_bool true.
+
+Proof.
+ eexists. 
+  split.
+  *eapply e_sequence.
+  +eapply e_bool_decl.
+  -eapply e_false.
+  -unfold local. simpl. trivial.
+  +eapply e_bool_assign.
+  -simpl. trivial. 
+  -eapply e_true.
+  -unfold update_at_adress. simpl. trivial.
+  *simpl. unfold update_memory. simpl. trivial.
+Qed.
 
 
