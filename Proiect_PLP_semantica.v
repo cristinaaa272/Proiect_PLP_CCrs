@@ -174,18 +174,18 @@ Inductive Types :=
   | val_string : ErrString -> Types 
   | val_pointer : nat -> bool -> Types
   | val_array : ErrArray -> Types
-  | code : Statement -> Types. (* function code  *)
+  | code : list string -> Statement -> Types. (* function code  *)
 
 
 Coercion val_nat : ErrNat >-> Types.
 Coercion val_bool : ErrBool >-> Types.
 Coercion val_string : ErrString >-> Types.
 Coercion val_array : ErrArray >-> Types.
-Coercion code : Statement >-> Types.
+
 
 Definition get_statement (cod : Types) : Statement :=
 match cod with
-| code statement => statement
+| code _ statement => statement
 | _ => empty
 end.
 
@@ -243,8 +243,8 @@ Definition type_equality  (t1 : Types)(t2 : Types) : bool :=
                    | val_array v2 => true
                    | _ => false
                    end
- | code _x => match t2 with
-                  | code _x => true
+ | code _ _x => match t2 with
+                  | code _ _x => true
                   | _ => false
                  end
   end.
@@ -459,7 +459,7 @@ Inductive streval_fun : STRexp -> MemLayer -> Types -> Prop :=
 | s_cat : forall s1 s2 sigma s st1 st2,
     s1 =S[ sigma ]=> st1 ->
     s2 =S[ sigma ]=> st2 ->
-    s =Strcat st1 st2 ->
+    s = Strcat st1 st2 ->
     s1 /+/ s2 =S[ sigma ]=> s
 where "STR '=S[' St ']=>' N" := (streval_fun STR St N).
 
@@ -487,20 +487,6 @@ match a with
 | array_s s n l => val_array (array_s s n (List.remove string_dec (List.nth nr l "") l))
 | err_array => err_undecl
 end.
-
-
-
-
-(*Reserved Notation "ARR '~[' St ']~>' N" (at level 60).
-Inductive array_eval: ARRAY_exp -> MemLayer -> Types -> Prop :=
-| arr_Const: forall a sigma ,
-  arr_const a ~[ sigma ]~> val_array a
-| arr_Var: forall a sigma mem ,
-  arr_var a ~[ sigma ]~> (mem(sigma a))
-| arr_elem: forall a nr rez sigma ,
-   rez = (get_elem a nr)
- ( elem a nr) ~[ sigma ]~> rez
-where "ARR '~[' St ']~>' N" := (array_eval ARR St N).*)
 
 
 
@@ -865,8 +851,6 @@ Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -
     loc = local sigma V -> 
     sigma1 = update_local_mem sigma P (val_pointer (get_adress sigma V) loc) (get_local_top sigma) ->
     ( ptr_string_decl P V )-{ sigma , new }-> sigma1 , new
-(* |e_array_decl
-   | e_ref_decl*)
 | e_nat_assign : forall s x value sigma sigma' new,
     type_equality (get_value sigma s) (val_nat 0) = true ->
     value =[ sigma ]=> x ->
@@ -897,7 +881,6 @@ Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -
     E =S[ sigma ]=> i1 ->
     sigma1 = update_at_adress sigma (pointer_adress (get_value sigma V) ) i1  ->
    ( ptr_assign_s V E )-{ sigma , new }-> sigma1 , new
-(*|e_ref_assign*)
 | e_sequence : forall s1 s2 sigma sigma' sigma'' new new',
    ( s1 )-{ sigma , new }-> sigma' , new ->
    ( s2 )-{ sigma' , new }-> sigma'' , new' ->
@@ -945,7 +928,6 @@ Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -
     b ={ sigma }=> true ->
     n = ( sequence s break) ->
     ( sequence s ( while b n)) -{ sigma, new }-> sigma' , new
-(*|e_continue*)
 | e_switchcase : forall a c sigma n v sigma' new,
     a =[ sigma ]=> n ->
     v = (execute_switchcase n c) ->
@@ -956,6 +938,32 @@ Inductive eval_fun : Statement -> MemLayer -> MemLayer -> MemLayer -> MemLayer -
     ( stmt )-{ env_local sigma , sigma}-> sigma' , new ->
     ( fun_call s l )-{ sigma , new }-> sigma' , new
 where "L -{ M , S }-> M' , S'" := (eval_fun L M S M' S').
+
+(*Program semantics*)
+
+Reserved Notation "P -{{ M1 }}=> M2" (at level 60).
+Inductive pgm_eval : Pgm -> MemLayer -> MemLayer -> Prop :=
+|e_secv : forall s s' sigma sigma' sigma'',
+   ( s )-{{ sigma }}=> sigma' ->
+   ( s' )-{{ sigma' }}=> sigma'' ->
+   (secv s s' )-{{ sigma }}=> sigma''
+| e_default_nat_decl : forall s sigma sigma',
+  sigma' = update_global_mem sigma s (val_nat 0) (get_global_top sigma) ->
+  ( default_nat_decl s )-{{ sigma }}=> sigma'
+| e_default_bool_decl : forall s sigma sigma',
+  sigma' = update_global_mem sigma s (val_bool false) (get_global_top sigma) ->
+  ( default_bool_decl s )-{{ sigma }}=> sigma'
+| e_default_string_decl : forall s sigma sigma',
+  sigma' = update_global_mem sigma s (val_string "" ) (get_global_top sigma) ->
+  ( default_string_decl s )-{{ sigma }}=> sigma'
+| e_main : forall statements sigma sigma' new,
+  new = env_default ->
+  ( statements )-{ sigma , new }-> sigma' , new->
+  ( main statements )-{{ sigma }}=> sigma'
+| e_function : forall s L  statements sigma sigma',
+  sigma' = update_global_mem sigma s (code L statements) (get_global_top sigma) ->
+  ( function s L statements )-{{ sigma }}=> sigma'
+where "P -{{ M1 }}=> M2" := (pgm_eval P M1 M2).
 
 
 
@@ -1187,6 +1195,7 @@ Check (BOOL "new" ::= b_false) ;;
 Definition env_1 := update_local_mem env_default "x" (num 3) (get_local_top env_default).
 Definition env_2 := update_local_mem env_1 "y" (num 5) (get_local_top env_1).
 Definition env_3 := update_local_mem env_1 "value" (val_bool false) (get_local_top env_1).
+Definition env_4 := update_local_mem env_default "str1" (val_string "proiectPLP") (get_local_top env_default).
 
 Compute get_local_adress env_2 "x".
 Compute get_local_adress env_2 "y".
@@ -1234,24 +1243,46 @@ Proof.
 Qed.
 
 
-Example ex_10 : exists env', ( (NAT "x" ::= 10) ;;
-                                "y" := NAT** "x"  ) -{ env_default , env_default }-> env' , env_default
-    /\ get_value env' "x" = pointer_value env' "y".
+Example ex_6 : len[ "str1" ] =[ env_4 ]=> val_nat 10.
+Proof.
+   eapply e_strlen.
+   - apply s_var.
+   - simpl. reflexivity.
+Qed.
+
+
+Example ex_7 : exists env', 
+  (Default_nat "valnat" ;.;
+   Default_bool "valbool" )-{{ env_default }}=> env' 
+        /\ get_value env' "valnat" = 0 /\ get_value env' "valbool" = false.
+Proof.
+ eexists.
+  split.
+  - eapply e_secv.
+  + eapply e_default_nat_decl. simpl. trivial.
+  + eapply e_default_bool_decl. simpl. trivial.
+  -split; simpl; trivial.
+Qed.
+
+
+Example ex_8 : exists env', ( (NAT "p1" ::= 18) ;;
+                                "p2" := NAT** "p1"  ) -{ env_default , env_default }-> env' , env_default
+    /\ get_value env' "p1" = pointer_value env' "p2".
 
 Proof.
   eexists.
   split.
   *eapply e_sequence.
-  -eapply e_nat_decl. eapply e_const. unfold local. simpl. trivial.
+  -eapply e_nat_decl. eapply e_const. simpl. trivial.
     -eapply e_ptr_nat_decl.
     +simpl. trivial.
-    + unfold local. simpl. trivial.
-    + unfold local. simpl. trivial.
-    *unfold local. simpl. trivial.
+    + simpl. trivial.
+    + simpl. trivial.
+    * simpl. trivial.
 Qed.
 
-Example ex_11 :  exists env', ( BOOL "x" ::= b_false ;; "x" b:= b_true )-{ env_default , env_default }-> env' , env_default
-    /\ get_value env' "x" = val_bool true.
+Example ex_9 :  exists env', ( BOOL "bul" ::= b_false ;; "bul" b:= b_true )-{ env_default , env_default }-> env' , env_default
+    /\ get_value env' "bul" = val_bool true.
 
 Proof.
  eexists. 
@@ -1267,4 +1298,22 @@ Proof.
   *simpl. unfold update_memory. simpl. trivial.
 Qed.
 
+Example ex_10 : exists env', 
+              (
+               (NAT "x" ::= 0 );;
+               While
+                ( "x" <' 0 )
+                {"x" n:= "x" +++ } End
+              )-{ env_default, env_default }-> env' , env_default
+    /\ get_value env' "x" = 0.
+Proof.
+  eexists.
+  split.
+  -eapply e_sequence.
+    +eapply e_nat_decl. eapply e_const. simpl. trivial.
+    +eapply e_while_false. 
+      *eapply e_less. eapply e_avar. simpl. trivial.
+       eapply e_const. simpl. trivial. 
+       - simpl. simpl. trivial.
+Qed.
 
